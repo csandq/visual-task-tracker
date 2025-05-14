@@ -1,5 +1,12 @@
 import React, { useState } from "react";
 
+const tagColors = {
+  Marketing: "bg-blue-100 text-blue-700",
+  Design: "bg-pink-100 text-pink-700",
+  Dev: "bg-green-100 text-green-700",
+  Research: "bg-yellow-100 text-yellow-700"
+};
+
 const initialTasks = [
   {
     id: 1,
@@ -25,24 +32,33 @@ const Step = ({ label, status, note, deadline, onClick }) => {
   return (
     <div className="flex flex-col items-center space-y-1 relative cursor-pointer" onClick={onClick}>
       {note && (
-        <span className="absolute -top-3 right-0 bg-red-500 text-white text-[10px] rounded-full px-1">
-          💬
-        </span>
+        <span className="absolute -top-3 right-0 text-[10px] font-bold text-gray-800">1</span>
       )}
-      <div className={`w-6 h-6 rounded-full border-4 ${getColor()}`}></div>
+      <div className={`w-6 h-6 rounded-full border-4 flex items-center justify-center text-[10px] ${getColor()}`}></div>
       <span className="text-xs text-center whitespace-nowrap">{label}</span>
       {deadline && <span className="text-[10px] text-gray-500">{deadline}</span>}
     </div>
   );
 };
 
-const TaskRow = ({ task, onStepClick }) => (
+const TaskRow = ({ task, onStepClick, onTitleClick, onTagEdit }) => (
   <div className="mb-6">
     <div className="flex items-center justify-between mb-1">
-      <h2 className="font-semibold">{task.title}</h2>
+      <h2
+        className="font-semibold cursor-pointer hover:underline"
+        onClick={() => onTitleClick(task.id)}
+      >
+        {task.title}
+      </h2>
       <div className="flex gap-2">
         {task.tags.map((tag, i) => (
-          <span key={i} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{tag}</span>
+          <span
+            key={i}
+            onClick={() => onTagEdit(task.id)}
+            className={`text-xs px-2 py-0.5 rounded cursor-pointer ${tagColors[tag] || "bg-gray-100 text-gray-700"}`}
+          >
+            {tag}
+          </span>
         ))}
       </div>
     </div>
@@ -65,6 +81,8 @@ export default function App() {
   const [newTag, setNewTag] = useState("");
   const [modal, setModal] = useState(null);
   const [stepModal, setStepModal] = useState(null);
+  const [tagEditModal, setTagEditModal] = useState(null);
+  const [titleEditModal, setTitleEditModal] = useState(null);
 
   const addTask = () => {
     if (!newTitle.trim()) return;
@@ -85,14 +103,15 @@ export default function App() {
     setModal(newTask.id);
   };
 
-  const updateStep = (taskId, stepIndex, note, deadline) => {
+  const updateStep = (taskId, stepIndex, note, deadline, label) => {
     const updated = tasks.map((task) => {
       if (task.id === taskId) {
         const newSteps = [...task.steps];
         newSteps[stepIndex] = {
           ...newSteps[stepIndex],
           note,
-          deadline
+          deadline,
+          label
         };
         return { ...task, steps: newSteps };
       }
@@ -113,6 +132,38 @@ export default function App() {
           : task
       )
     );
+  };
+
+  const removeStepFromTask = (taskId, stepIndex) => {
+    setTasks((prev) =>
+      prev.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              steps: task.steps.filter((_, i) => i !== stepIndex)
+            }
+          : task
+      )
+    );
+    setStepModal(null);
+  };
+
+  const updateTags = (taskId, tagString) => {
+    const tags = tagString
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    setTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, tags } : task))
+    );
+    setTagEditModal(null);
+  };
+
+  const updateTaskTitle = (taskId, newTitle) => {
+    setTasks((prev) =>
+      prev.map((task) => (task.id === taskId ? { ...task, title: newTitle } : task))
+    );
+    setTitleEditModal(null);
   };
 
   return (
@@ -145,6 +196,8 @@ export default function App() {
           key={task.id}
           task={task}
           onStepClick={(taskId, stepIndex) => setStepModal({ taskId, stepIndex })}
+          onTitleClick={(taskId) => setTitleEditModal({ taskId })}
+          onTagEdit={(taskId) => setTagEditModal({ taskId })}
         />
       ))}
 
@@ -179,9 +232,19 @@ export default function App() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
           <div className="bg-white p-6 rounded shadow w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">Edit Step</h2>
+            <input
+              type="text"
+              className="w-full border p-2 mb-2"
+              value={tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].label}
+              onChange={(e) => {
+                const newTasks = [...tasks];
+                newTasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].label = e.target.value;
+                setTasks(newTasks);
+              }}
+            />
             <textarea
-              className="w-full border p-2 mb-4"
-              rows={3}
+              className="w-full border p-2 mb-2"
+              rows={2}
               placeholder="Add a note..."
               value={tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].note}
               onChange={(e) => {
@@ -192,7 +255,7 @@ export default function App() {
             ></textarea>
             <input
               type="date"
-              className="w-full border p-2 mb-4"
+              className="w-full border p-2 mb-2"
               value={tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].deadline}
               onChange={(e) => {
                 const newTasks = [...tasks];
@@ -200,12 +263,12 @@ export default function App() {
                 setTasks(newTasks);
               }}
             />
-            <div className="flex justify-end space-x-2">
+            <div className="flex justify-between">
               <button
-                className="bg-gray-300 px-4 py-1 rounded"
-                onClick={() => setStepModal(null)}
+                className="bg-red-500 text-white px-4 py-1 rounded"
+                onClick={() => removeStepFromTask(stepModal.taskId, stepModal.stepIndex)}
               >
-                Cancel
+                Delete Step
               </button>
               <button
                 className="bg-blue-500 text-white px-4 py-1 rounded"
@@ -213,12 +276,57 @@ export default function App() {
                   stepModal.taskId,
                   stepModal.stepIndex,
                   tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].note,
-                  tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].deadline
+                  tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].deadline,
+                  tasks.find(t => t.id === stepModal.taskId).steps[stepModal.stepIndex].label
                 )}
               >
                 Save
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {tagEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Edit Tags</h2>
+            <input
+              type="text"
+              className="w-full border p-2 mb-4"
+              placeholder="Enter new tags (comma separated)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") updateTags(tagEditModal.taskId, e.target.value);
+              }}
+            />
+            <button
+              className="bg-gray-300 px-4 py-1 rounded w-full"
+              onClick={() => setTagEditModal(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {titleEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Edit Task Title</h2>
+            <input
+              type="text"
+              className="w-full border p-2 mb-4"
+              placeholder="Enter new title"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") updateTaskTitle(titleEditModal.taskId, e.target.value);
+              }}
+            />
+            <button
+              className="bg-gray-300 px-4 py-1 rounded w-full"
+              onClick={() => setTitleEditModal(null)}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
