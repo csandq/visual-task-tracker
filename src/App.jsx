@@ -1,3 +1,5 @@
+/* Add this at the top of your file to ensure dark mode styling works */
+import "./index.css";
 import React, { useState, useEffect } from "react";
 
 // Simple constants
@@ -126,11 +128,32 @@ export default function App() {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    
+    // Add this to ensure Tailwind's dark mode works
+    if (typeof window !== 'undefined') {
+      const htmlElement = document.querySelector('html');
+      if (htmlElement) {
+        if (darkMode) {
+          htmlElement.classList.add('dark');
+        } else {
+          htmlElement.classList.remove('dark');
+        }
+      }
+    }
   }, [darkMode]);
   
   // Toggle dark mode
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    
+    // Apply directly to HTML element
+    document.documentElement.classList.toggle('dark', newDarkMode);
+    
+    // Also save to localStorage
+    localStorage.setItem("darkMode", JSON.stringify(newDarkMode));
+    
+    console.log("Dark mode toggled to:", newDarkMode);
   };
 
   // Helper functions
