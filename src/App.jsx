@@ -289,8 +289,9 @@ export default function App() {
     if (!newTitle.trim()) return;
     
     const tags = newTag ? newTag.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const newTaskId = Date.now();
     const newTask = { 
-      id: Date.now(), 
+      id: newTaskId, 
       title: newTitle, 
       tags, 
       steps: [], 
@@ -302,7 +303,7 @@ export default function App() {
     setNewTag("");
     
     // Open add step modal
-    openStepModal(newTask.id, -1);
+    openStepModal(newTaskId, -1);
   };
 
   const updateTaskTitle = () => {
@@ -476,7 +477,7 @@ export default function App() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto mt-10 p-4 bg-white shadow rounded">
+    <div className="max-w-5xl mx-auto mt-10 p-4 bg-white shadow rounded">
       <h1 className="text-2xl font-bold mb-6">Task Tracker</h1>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -550,10 +551,35 @@ export default function App() {
               </button>
             )}
           </div>
+          
+          {/* Task List */}
+          <div className="space-y-4">
+            {filteredTasks.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {tasks.length === 0 ? 
+                  "No tasks yet. Add your first task above!" : 
+                  "No tasks match your current filters."}
+              </div>
+            ) : (
+              filteredTasks.map(task => (
+                <TaskRow
+                  key={task.id}
+                  task={{
+                    ...task,
+                    // Ensure we use the latest tag colors
+                    tagColors: tagSettings.colors
+                  }}
+                  onStepClick={(index) => openStepModal(task.id, index)}
+                  onTitleClick={() => openTitleModal(task.id)}
+                  onTagClick={() => openTagModal(task.id)}
+                />
+              ))
+            )}
+          </div>
         </div>
         
         {/* Tag Manager Panel */}
-        <div className="bg-gray-50 p-4 rounded">
+        <div className="bg-gray-50 p-4 rounded h-fit sticky top-4">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-semibold">Tag Manager</h2>
             <button
@@ -662,6 +688,12 @@ export default function App() {
                       </button>
                     </div>
                   ))}
+                  
+                  {tagSettings.tags.length === 0 && (
+                    <div className="text-sm text-gray-500 text-center py-2">
+                      No tags created yet
+                    </div>
+                  )}
                 </div>
               </div>
             </>
