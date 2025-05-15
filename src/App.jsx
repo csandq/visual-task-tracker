@@ -72,6 +72,14 @@ export default function App() {
   const [editingStep, setEditingStep] = useState({ label: "", status: "todo", note: "", deadline: "" });
   const [newStepName, setNewStepName] = useState("");
   
+  // Task editing state
+  const [editingTask, setEditingTask] = useState({
+    title: "",
+    tags: [],
+    priority: "Medium"
+  });
+  const [editTagInput, setEditTagInput] = useState("");
+  
   // Save to localStorage
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -186,6 +194,61 @@ export default function App() {
     closeModal();
   };
 
+  // New Task editing functions
+  const openTaskEditModal = (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    setCurrentTaskId(taskId);
+    setModalType("task");
+    setEditingTask({
+      title: task.title,
+      tags: [...task.tags], // Create a copy of the tags array
+      priority: task.priority
+    });
+    setEditTagInput("");
+  };
+  
+  const updateTask = () => {
+    if (!editingTask.title.trim()) return;
+    
+    setTasks(tasks.map(task => 
+      task.id === currentTaskId
+        ? {
+            ...task,
+            title: editingTask.title,
+            tags: editingTask.tags,
+            priority: editingTask.priority
+          }
+        : task
+    ));
+    
+    closeModal();
+  };
+  
+  const addTagToEditingTask = () => {
+    if (!editTagInput.trim()) return;
+    
+    const newTags = editTagInput
+      .split(",")
+      .map(tag => tag.trim())
+      .filter(Boolean);
+    
+    setEditingTask({
+      ...editingTask,
+      tags: [...editingTask.tags, ...newTags]
+    });
+    
+    setEditTagInput("");
+  };
+  
+  const removeTagFromEditingTask = (tagIndex) => {
+    setEditingTask({
+      ...editingTask,
+      tags: editingTask.tags.filter((_, i) => i !== tagIndex)
+    });
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 bg-white shadow rounded">
       <h1 className="text-2xl font-bold mb-6">Task Tracker</h1>
@@ -235,7 +298,10 @@ export default function App() {
           tasks.map(task => (
             <div key={task.id} className="mb-6 p-3 border border-gray-200 rounded hover:shadow-md">
               <div className="flex items-center justify-between mb-1">
-                <h2 className="font-semibold">
+                <h2 
+                  className="font-semibold cursor-pointer hover:text-blue-600"
+                  onClick={() => openTaskEditModal(task.id)}
+                >
                   {task.title} 
                   <span className={`text-xs text-white ${PRIORITY_COLORS[task.priority] || "bg-gray-600"} px-2 py-0.5 ml-2 rounded`}>
                     Priority: {task.priority || 'Medium'}
@@ -250,6 +316,12 @@ export default function App() {
                       {tag}
                     </span>
                   ))}
+                  <button
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                    onClick={() => openTaskEditModal(task.id)}
+                  >
+                    Edit
+                  </button>
                 </div>
               </div>
               <div className="flex items-center space-x-6 overflow-x-auto py-2">
@@ -397,6 +469,102 @@ export default function App() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Edit Modal */}
+      {modalType === "task" && getCurrentTask() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              Edit Task
+            </h2>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Task Title
+              </label>
+              <input 
+                type="text"
+                className="w-full border p-2 rounded" 
+                value={editingTask.title} 
+                onChange={(e) => setEditingTask({...editingTask, title: e.target.value})}
+              />
+            </div>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Priority
+              </label>
+              <select 
+                className="w-full border p-2 rounded" 
+                value={editingTask.priority} 
+                onChange={(e) => setEditingTask({...editingTask, priority: e.target.value})}
+              >
+                <option value="Low">Low Priority</option>
+                <option value="Medium">Medium Priority</option>
+                <option value="High">High Priority</option>
+              </select>
+            </div>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tags
+              </label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {editingTask.tags.map((tag, index) => (
+                  <div 
+                    key={index} 
+                    className={`text-xs px-2 py-1 rounded flex items-center ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
+                  >
+                    {tag}
+                    <button 
+                      className="ml-1 text-gray-600 hover:text-red-600"
+                      onClick={() => removeTagFromEditingTask(index)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  className="border p-2 rounded flex-grow" 
+                  placeholder="Add tags (comma-separated)" 
+                  value={editTagInput} 
+                  onChange={(e) => setEditTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && editTagInput.trim()) {
+                      addTagToEditingTask();
+                    }
+                  }}
+                />
+                <button 
+                  className="bg-gray-200 px-3 py-2 rounded hover:bg-gray-300" 
+                  onClick={addTagToEditingTask}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex justify-between mt-4">
+              <button 
+                className="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400" 
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button 
+                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" 
+                onClick={updateTask}
+                disabled={!editingTask.title.trim()}
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
