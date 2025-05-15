@@ -127,12 +127,13 @@ export default function App() {
       steps: [...task.steps, { label, status: "todo", note: "", deadline: "" }]
     } : task));
     setNewStep("");
+    // Don't close the modal - allow adding multiple steps
   };
 
   const updateStep = (taskId, index, updatedStep) => {
     setTasks(tasks.map(task => task.id === taskId ? {
       ...task,
-      steps: task.steps.map((s, i) => i === index ? updatedStep : s)
+      steps: task.steps.map((s, i) => i === index ? {...updatedStep} : s)
     } : task));
     setStepModal(null);
   };
@@ -275,13 +276,19 @@ export default function App() {
       {/* Step Modal */}
       {stepModal && (() => {
         const task = tasks.find(t => t.id === stepModal.taskId);
+        if (!task) return null; // Safety check to prevent white screen
+        
         const isNewStep = stepModal.stepIdx === -1;
-        const step = isNewStep ? { label: "", status: "todo", note: "", deadline: "" } : task.steps[stepModal.stepIdx];
+        
+        // Create a shallow copy for editing to prevent direct state mutation
+        const step = isNewStep 
+          ? { label: "", status: "todo", note: "", deadline: "" } 
+          : { ...task.steps[stepModal.stepIdx] };
         
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
             <div className="bg-white p-6 rounded shadow w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">{isNewStep ? "Add New Step" : "Edit Step"}</h2>
+              <h2 className="text-xl font-semibold mb-4">{isNewStep ? "Add Steps" : "Edit Step"}</h2>
               
               <div className="mb-3">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Step Name</label>
@@ -289,6 +296,14 @@ export default function App() {
                   className="w-full border p-2 rounded" 
                   value={isNewStep ? newStep : step.label} 
                   onChange={(e) => isNewStep ? setNewStep(e.target.value) : step.label = e.target.value} 
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && isNewStep) {
+                      if (newStep.trim()) {
+                        addStepToTask(stepModal.taskId, newStep);
+                        setNewStep("");
+                      }
+                    }
+                  }}
                 />
               </div>
               
@@ -336,13 +351,15 @@ export default function App() {
                       className="bg-gray-300 text-gray-800 px-4 py-2 rounded" 
                       onClick={() => setStepModal(null)}
                     >
-                      Cancel
+                      Done
                     </button>
                     <button 
                       className="bg-blue-500 text-white px-4 py-2 rounded" 
                       onClick={() => {
-                        addStepToTask(stepModal.taskId, newStep);
-                        setStepModal(null);
+                        if (newStep.trim()) {
+                          addStepToTask(stepModal.taskId, newStep);
+                          setNewStep("");
+                        }
                       }}
                     >
                       Add Step
@@ -373,8 +390,10 @@ export default function App() {
       {/* Title Modal */}
       {titleModal && (() => {
         const task = tasks.find(t => t.id === titleModal);
+        if (!task) return null; // Safety check to prevent white screen
+        
         const [editTitle, setEditTitle] = useState(task.title);
-        const [editPriority, setEditPriority] = useState(task.priority);
+        const [editPriority, setEditPriority] = useState(task.priority || "Medium");
         
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
@@ -433,6 +452,8 @@ export default function App() {
       {/* Tag Modal */}
       {tagModal && (() => {
         const task = tasks.find(t => t.id === tagModal);
+        if (!task) return null; // Safety check to prevent white screen
+        
         const [selectedTags, setSelectedTags] = useState([...task.tags]);
         const [customTag, setCustomTag] = useState("");
         
