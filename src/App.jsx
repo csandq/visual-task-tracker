@@ -1,4 +1,11 @@
-import React, { useState, useEffect } from "react";
+  // For debugging purpose, log when modals open/close
+  useEffect(() => {
+    console.log("Modal state changed:", { 
+      modalType, 
+      currentTaskId, 
+      taskExists: currentTaskId ? Boolean(tasks.find(t => t.id === currentTaskId)) : false
+    });
+  }, [modalType, currentTaskId, tasks]);import React, { useState, useEffect } from "react";
 
 // Simple constants
 const PRIORITY_COLORS = {
@@ -93,6 +100,9 @@ export default function App() {
     const tags = newTag ? newTag.split(",").map(t => t.trim()).filter(Boolean) : [];
     const newTaskId = Date.now();
     
+    console.log("Creating task with ID:", newTaskId);
+    
+    // First update the state
     const newTask = { 
       id: newTaskId, 
       title: newTitle, 
@@ -101,16 +111,20 @@ export default function App() {
       priority: newPriority 
     };
     
+    // Update tasks state
     setTasks([newTask, ...tasks]);
+    
+    // Reset form fields
     setNewTitle("");
     setNewTag("");
     
-    // Open step modal with delay
+    // IMPORTANT: Use setTimeout to make sure the task is added before opening modal
     setTimeout(() => {
+      console.log("Now opening step modal for new task:", newTaskId);
       setCurrentTaskId(newTaskId);
       setStepIndex(-1);
       setModalType("step");
-    }, 50);
+    }, 100); // Slightly longer timeout to ensure state updates
   };
   
   const deleteTask = (taskId) => {
@@ -241,15 +255,29 @@ export default function App() {
                     Priority: {task.priority || 'Medium'}
                   </span>
                 </h2>
-                <div className="flex gap-2">
-                  {task.tags.map((tag, i) => (
-                    <span 
-                      key={i}
-                      className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
-                    >
-                      {tag}
-                    </span>
-                  ))}
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2">
+                    {task.tags.map((tag, i) => (
+                      <span 
+                        key={i}
+                        className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTask(task.id);
+                    }} 
+                    className="text-gray-500 hover:text-red-600"
+                    title="Delete Task"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </div>
               <div className="flex items-center space-x-6 overflow-x-auto py-2">
@@ -272,12 +300,7 @@ export default function App() {
                 </button>
               </div>
               <div className="flex justify-end mt-2">
-                <button 
-                  onClick={() => deleteTask(task.id)} 
-                  className="text-xs text-red-600 hover:text-red-800"
-                >
-                  Delete Task
-                </button>
+                {/* Removed text delete button since we now have the icon */}
               </div>
             </div>
           ))
