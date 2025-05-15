@@ -998,6 +998,171 @@ export default function App() {
       )}
     </div>
   );
+}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Selected Tags
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTags.map((tag, i) => (
+                    <div 
+                      key={i}
+                      className={`px-3 py-1 rounded text-sm flex items-center ${
+                        tagSettings.colors[tag] || "bg-gray-200 text-gray-800"
+                      }`}
+                    >
+                      {tag}
+                      <span 
+                        className="ml-2 cursor-pointer" 
+                        onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+                      >
+                        ×
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end mt-4">
+              <button 
+                className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2" 
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button 
+                className="bg-blue-500 text-white px-3 py-2 rounded" 
+                onClick={updateTaskTags}
+              >
+                Save Tags
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step Modal */}
+      {modalType === "step" && getCurrentTask() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              {stepIndex === -1 ? "Add Steps" : "Edit Step"}
+            </h2>
+            
+            {stepIndex === -1 ? (
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Step Name
+                </label>
+                <input 
+                  type="text"
+                  className="w-full border p-2 rounded" 
+                  value={newStepName} 
+                  onChange={(e) => setNewStepName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newStepName.trim()) {
+                      addStep();
+                    }
+                  }}
+                  autoFocus
+                />
+              </div>
+            ) : (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Step Name
+                  </label>
+                  <input 
+                    type="text"
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.label} 
+                    onChange={(e) => setEditingStep({...editingStep, label: e.target.value})}
+                    autoFocus
+                  />
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.note} 
+                    onChange={(e) => setEditingStep({...editingStep, note: e.target.value})}
+                  />
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Deadline
+                  </label>
+                  <input 
+                    type="date" 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.deadline || ""} 
+                    onChange={(e) => setEditingStep({...editingStep, deadline: e.target.value})}
+                  />
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.status} 
+                    onChange={(e) => setEditingStep({...editingStep, status: e.target.value})}
+                  >
+                    <option value="todo">Not Started</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="done">Complete</option>
+                    <option value="on-hold">On Hold</option>
+                  </select>
+                </div>
+              </>
+            )}
+            
+            <div className="flex justify-between mt-4">
+              {stepIndex === -1 ? (
+                <>
+                  <button 
+                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded" 
+                    onClick={closeModal}
+                  >
+                    Done
+                  </button>
+                  <button 
+                    className="bg-blue-500 text-white px-4 py-2 rounded" 
+                    onClick={addStep}
+                    disabled={!newStepName.trim()}
+                  >
+                    Add Step
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" 
+                    onClick={deleteStep}
+                  >
+                    Delete
+                  </button>
+                  <button 
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" 
+                    onClick={updateStep}
+                  >
+                    Save
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }d-l px-3 py-1 flex-grow" 
                   placeholder="New tag name..." 
                 />
