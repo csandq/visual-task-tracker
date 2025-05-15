@@ -1,278 +1,30 @@
-  // Render tag manager modal
-  const renderTagManagerModal = () => {
-    const colorOptions = ['blue', 'green', 'red', 'yellow', 'purple', 'pink', 'indigo', 'teal', 'orange', 'gray'];
-    const shadeOptions = ['100', '200', '300', '400', '500', '600', '700', '800', '900'];
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
-        <div className="bg-white p-6 rounded shadow w-full max-w-md max-h-[80vh] overflow-y-auto">
-          <h2 className="text-xl font-semibold mb-4">Tag Manager</h2>
-          
-          {/* Tag Creator Form */}
-          <div className="mb-6 p-4 bg-gray-50 rounded">
-            <h3 className="text-lg font-medium mb-3">
-              {editingTag ? `Edit Tag: ${editingTag}` : 'Create New Tag'}
-            </h3>
-            
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tag Name
-              </label>
-              <input 
-                type="text"
-                className="w-full border p-2 rounded" 
-                placeholder="Tag name..." 
-                value={newTagName} 
-                onChange={(e) => setNewTagName(e.target.value)}
-                disabled={editingTag && defaultTags.includes(editingTag)}
-              />
-              {editingTag && defaultTags.includes(editingTag) && (
-                <p className="text-xs text-orange-500 mt-1">
-                  Default tag names cannot be changed
-                </p>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Color
-                </label>
-                <select 
-                  className="w-full border p-2 rounded" 
-                  value={newTagColor} 
-                  onChange={(e) => setNewTagColor(e.target.value)}
-                >
-                  {colorOptions.map(color => (
-                    <option key={color} value={color}>{color}</option>
-                  ))}
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Background Shade
-                </label>
-                <select 
-                  className="w-full border p-2 rounded" 
-                  value={newTagShade} 
-                  onChange={(e) => setNewTagShade(e.target.value)}
-                >
-                  {shadeOptions.map(shade => (
-                    <option key={shade} value={shade}>{shade}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Text Shade
-              </label>
-              <select 
-                className="w-full border p-2 rounded" 
-                value={newTagTextShade} 
-                onChange={(e) => setNewTagTextShade(e.target.value)}
-              >
-                {shadeOptions.map(shade => (
-                  <option key={shade} value={shade}>{shade}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Preview
-              </label>
-              <div className={`inline-block px-3 py-1 rounded text-sm bg-${newTagColor}-${newTagShade} text-${newTagColor}-${newTagTextShade}`}>
-                {newTagName || "Tag Preview"}
-              </div>
-            </div>
-            
-            <div className="flex justify-end">
-              {editingTag && (
-                <button
-                  className="mr-auto bg-red-500 text-white px-3 py-2 rounded"
-                  onClick={() => {
-                    if (!defaultTags.includes(editingTag)) {
-                      deleteTag(editingTag);
-                    }
-                  }}
-                  disabled={defaultTags.includes(editingTag)}
-                >
-                  Delete
-                </button>
-              )}
-              
-              <button
-                className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2"
-                onClick={() => {
-                  setEditingTag(null);
-                  setNewTagName("");
-                }}
-              >
-                Cancel
-              </button>
-              
-              <button
-                className="bg-blue-500 text-white px-3 py-2 rounded"
-                onClick={addCustomTag}
-                disabled={!newTagName.trim()}
-              >
-                {editingTag ? 'Update' : 'Create'}
-              </button>
-            </div>
-          </div>
-          
-          {/* Tag List */}
-          <div className="mb-6">
-            <h3 className="text-lg font-medium mb-3">Your Tags</h3>
-            
-            <div className="space-y-2">
-              {allTags.map((tag) => (
-                <div 
-                  key={tag}
-                  className="flex items-center justify-between p-2 border rounded hover:bg-gray-50"
-                >
-                  <div className="flex items-center">
-                    <span className={`px-3 py-1 rounded text-sm mr-3 ${tagColors[tag] || "bg-gray-200 text-gray-800"}`}>
-                      {tag}
-                    </span>
-                    {defaultTags.includes(tag) && (
-                      <span className="text-xs text-gray-500">Default</span>
-                    )}
-                  </div>
-                  
-                  <button
-                    className="text-blue-600 hover:text-blue-800"
-                    onClick={() => startEditingTag(tag)}
-                  >
-                    Edit
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="flex justify-end">
-            <button
-              className="bg-blue-500 text-white px-4 py-2 rounded"
-              onClick={() => {
-                setModalType(currentTaskId ? "tag" : null);
-              }}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };  // Add a custom tag
-  const addCustomTag = () => {
-    if (!newTagName.trim() || allTags.includes(newTagName.trim())) {
-      return;
-    }
-    
-    const tagName = newTagName.trim();
-    const tagColor = `bg-${newTagColor}-${newTagShade} text-${newTagColor}-${newTagTextShade}`;
-    
-    // Update tags and colors
-    setAllTags([...allTags, tagName]);
-    setTagColors({...tagColors, [tagName]: tagColor});
-    
-    // Reset form
-    setNewTagName("");
-    
-    // If we're editing a tag, reset the editing state
-    if (editingTag) {
-      setEditingTag(null);
-    }
-  };
-  
-  // Delete a custom tag
-  const deleteTag = (tagName) => {
-    if (defaultTags.includes(tagName)) {
-      // Don't allow deleting default tags
-      return;
-    }
-    
-    // Update all tasks that use this tag
-    const updatedTasks = tasks.map(task => ({
-      ...task,
-      tags: task.tags.filter(tag => tag !== tagName)
-    }));
-    
-    // Remove tag from state
-    const updatedTagColors = {...tagColors};
-    delete updatedTagColors[tagName];
-    
-    setTasks(updatedTasks);
-    setAllTags(allTags.filter(tag => tag !== tagName));
-    setTagColors(updatedTagColors);
-    
-    // If editing this tag, reset editing state
-    if (editingTag === tagName) {
-      setEditingTag(null);
-    }
-  };
-  
-  // Start editing a tag
-  const startEditingTag = (tagName) => {
-    setEditingTag(tagName);
-    setNewTagName(tagName);
-    
-    // Parse current color
-    const colorClass = tagColors[tagName] || "";
-    const bgMatch = colorClass.match(/bg-(\w+)-(\d+)/);
-    const textMatch = colorClass.match(/text-(\w+)-(\d+)/);
-    
-    if (bgMatch && bgMatch.length >= 3) {
-      setNewTagColor(bgMatch[1]);
-      setNewTagShade(bgMatch[2]);
-    }
-    
-    if (textMatch && textMatch.length >= 3) {
-      setNewTagTextShade(textMatch[2]);
-    }
-  };import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 
-// Constants
-const defaultTags = ["Marketing", "Design", "Dev", "Research"];
-const defaultTagColors = {
+// Constants for task statuses and priorities
+const PRIORITY_COLORS = {
+  High: "bg-red-600",
+  Medium: "bg-gray-600",
+  Low: "bg-green-600"
+};
+
+// Default tags and colors
+const DEFAULT_TAGS = ["Marketing", "Design", "Dev", "Research"];
+const DEFAULT_TAG_COLORS = {
   Marketing: "bg-blue-100 text-blue-700",
   Design: "bg-pink-100 text-pink-700",
   Dev: "bg-green-100 text-green-700",
   Research: "bg-yellow-100 text-yellow-700"
 };
 
-// Load custom tags from localStorage
-const loadCustomTags = () => {
-  const saved = localStorage.getItem("customTags");
-  return saved ? JSON.parse(saved) : {};
-};
-
-// Load all tags (predefined + custom)
-const loadAllTags = () => {
-  const customTags = loadCustomTags();
-  return [...defaultTags, ...Object.keys(customTags).filter(tag => !defaultTags.includes(tag))];
-};
-
-// Load all tag colors (predefined + custom)
-const loadTagColors = () => {
-  const customTags = loadCustomTags();
-  return {...defaultTagColors, ...customTags};
-};
-
-const priorityColors = {
-  High: "bg-red-600",
-  Medium: "bg-gray-600",
-  Low: "bg-green-600"
-};
-
-// Load tasks from localStorage
+// Load tasks from localStorage or use default
 const loadTasks = () => {
-  const saved = localStorage.getItem("tasks");
-  if (saved) return JSON.parse(saved);
+  try {
+    const saved = localStorage.getItem("tasks");
+    if (saved) return JSON.parse(saved);
+  } catch (error) {
+    console.error("Error loading tasks:", error);
+  }
+  
   return [
     {
       id: 1,
@@ -290,7 +42,7 @@ const loadTasks = () => {
   ];
 };
 
-// Step component
+// Step Component
 const Step = ({ label, status, note, deadline, onClick }) => {
   const getColor = () => {
     if (status === "done") return "bg-green-500 border-green-500";
@@ -309,13 +61,13 @@ const Step = ({ label, status, note, deadline, onClick }) => {
   );
 };
 
-// Task Row component
+// Task Row Component
 const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
   <div className="mb-6 p-3 border border-gray-200 rounded hover:shadow-md transition-shadow">
     <div className="flex items-center justify-between mb-1">
       <h2 className="font-semibold cursor-pointer hover:underline" onClick={onTitleClick}>
         {task.title} 
-        <span className={`text-xs text-white ${priorityColors[task.priority] || "bg-gray-600"} px-2 py-0.5 ml-2 rounded`}>
+        <span className={`text-xs text-white ${PRIORITY_COLORS[task.priority] || "bg-gray-600"} px-2 py-0.5 ml-2 rounded`}>
           Priority: {task.priority || 'Medium'}
         </span>
       </h2>
@@ -324,7 +76,7 @@ const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
           <span 
             key={i} 
             onClick={onTagClick} 
-            className={`text-xs px-2 py-0.5 rounded cursor-pointer ${tagColors[tag] || "bg-gray-100 text-gray-700"}`}
+            className={`text-xs px-2 py-0.5 rounded cursor-pointer ${DEFAULT_TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
           >
             {tag}
           </span>
@@ -351,123 +103,42 @@ const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
   </div>
 );
 
-// Main App component
+// Main App Component
 export default function App() {
-  // Main state
-  const [tasks, setTasks] = useState(loadTasks);
+  // Core state
+  const [tasks, setTasks] = useState(loadTasks());
   const [filter, setFilter] = useState({ tag: "", status: "" });
   
-  // Tags state
-  const [allTags, setAllTags] = useState(loadAllTags);
-  const [tagColors, setTagColors] = useState(loadTagColors);
-  const [showTagManager, setShowTagManager] = useState(false);
-  
-  // New task form state
+  // Form state
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
   const [newPriority, setNewPriority] = useState("Medium");
   
   // Modal state
   const [currentTaskId, setCurrentTaskId] = useState(null);
-  const [modalType, setModalType] = useState(null); // 'step', 'title', 'tag'
-  const [selectedStepIndex, setSelectedStepIndex] = useState(null);
+  const [modalType, setModalType] = useState(null);
+  const [stepIndex, setStepIndex] = useState(null);
   
-  // Temporary state for modals
-  const [editingStep, setEditingStep] = useState({
-    label: "",
-    status: "todo",
-    note: "",
-    deadline: ""
-  });
-  const [newStep, setNewStep] = useState("");
+  // Editing state
   const [editTitle, setEditTitle] = useState("");
   const [editPriority, setEditPriority] = useState("Medium");
   const [selectedTags, setSelectedTags] = useState([]);
-  const [customTag, setCustomTag] = useState("");
-  
-  // Tag manager state
-  const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState("blue");
-  const [newTagShade, setNewTagShade] = useState("100");
-  const [newTagTextShade, setNewTagTextShade] = useState("700");
-  const [editingTag, setEditingTag] = useState(null);
-  
-  // Save tasks to localStorage when they change
+  const [editingStep, setEditingStep] = useState({ label: "", status: "todo", note: "", deadline: "" });
+  const [newStepName, setNewStepName] = useState("");
+
+  // Save tasks to localStorage
   useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
-  
-  // Save custom tags to localStorage when they change
-  useEffect(() => {
-    const customTags = {};
-    
-    // Extract only custom tags (not in defaultTags)
-    Object.keys(tagColors).forEach(tag => {
-      if (!defaultTags.includes(tag)) {
-        customTags[tag] = tagColors[tag];
-      }
-    });
-    
-    localStorage.setItem("customTags", JSON.stringify(customTags));
-  }, [tagColors]);
-  
-  // Helper to find current task
-  const getCurrentTask = () => {
-    return tasks.find(t => t.id === currentTaskId) || null;
-  };
-  
-  // Open modals
-  const openStepModal = (taskId, stepIndex) => {
-    setCurrentTaskId(taskId);
-    setSelectedStepIndex(stepIndex);
-    setModalType("step");
-    
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    if (stepIndex >= 0) {
-      // Editing existing step
-      const step = task.steps[stepIndex];
-      setEditingStep({
-        label: step.label || "",
-        status: step.status || "todo",
-        note: step.note || "",
-        deadline: step.deadline || ""
-      });
-    } else {
-      // Adding new step
-      setNewStep("");
+    try {
+      localStorage.setItem("tasks", JSON.stringify(tasks));
+    } catch (error) {
+      console.error("Error saving tasks:", error);
     }
-  };
-  
-  const openTitleModal = (taskId) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    setCurrentTaskId(taskId);
-    setModalType("title");
-    setEditTitle(task.title);
-    setEditPriority(task.priority || "Medium");
-  };
-  
-  const openTagModal = (taskId) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    
-    setCurrentTaskId(taskId);
-    setModalType("tag");
-    setSelectedTags([...task.tags]);
-    setCustomTag("");
-  };
-  
-  // Close all modals
-  const closeModal = () => {
-    setModalType(null);
-    setCurrentTaskId(null);
-    setSelectedStepIndex(null);
-  };
-  
-  // Task operations
+  }, [tasks]);
+
+  // Get current task
+  const getCurrentTask = () => tasks.find(t => t.id === currentTaskId);
+
+  // Task Functions
   const addTask = () => {
     if (!newTitle.trim()) return;
     
@@ -484,11 +155,11 @@ export default function App() {
     setNewTitle("");
     setNewTag("");
     
-    // Open step modal for the new task
+    // Open add step modal
     openStepModal(newTask.id, -1);
   };
-  
-  const updateTitle = () => {
+
+  const updateTaskTitle = () => {
     if (!editTitle.trim()) return;
     
     setTasks(tasks.map(task => 
@@ -499,8 +170,8 @@ export default function App() {
     
     closeModal();
   };
-  
-  const updateTags = () => {
+
+  const updateTaskTags = () => {
     setTasks(tasks.map(task => 
       task.id === currentTaskId 
         ? { ...task, tags: selectedTags }
@@ -509,22 +180,22 @@ export default function App() {
     
     closeModal();
   };
-  
+
   const deleteTask = () => {
     setTasks(tasks.filter(task => task.id !== currentTaskId));
     closeModal();
   };
-  
-  // Step operations
-  const addStepToTask = () => {
-    if (!newStep.trim()) return;
+
+  // Step Functions
+  const addStep = () => {
+    if (!newStepName.trim()) return;
     
     setTasks(tasks.map(task => 
       task.id === currentTaskId
         ? {
             ...task,
             steps: [...task.steps, { 
-              label: newStep, 
+              label: newStepName, 
               status: "todo", 
               note: "", 
               deadline: "" 
@@ -533,16 +204,16 @@ export default function App() {
         : task
     ));
     
-    setNewStep("");
+    setNewStepName("");
   };
-  
+
   const updateStep = () => {
     setTasks(tasks.map(task => 
       task.id === currentTaskId
         ? {
             ...task,
-            steps: task.steps.map((step, index) => 
-              index === selectedStepIndex ? { ...editingStep } : step
+            steps: task.steps.map((step, i) => 
+              i === stepIndex ? { ...editingStep } : step
             )
           }
         : task
@@ -550,21 +221,21 @@ export default function App() {
     
     closeModal();
   };
-  
-  const removeStep = () => {
+
+  const deleteStep = () => {
     setTasks(tasks.map(task => 
       task.id === currentTaskId
         ? {
             ...task,
-            steps: task.steps.filter((_, index) => index !== selectedStepIndex)
+            steps: task.steps.filter((_, i) => i !== stepIndex)
           }
         : task
     ));
     
     closeModal();
   };
-  
-  // Tag operations
+
+  // Tag Functions
   const handleTagToggle = (tag) => {
     if (selectedTags.includes(tag)) {
       setSelectedTags(selectedTags.filter(t => t !== tag));
@@ -572,26 +243,61 @@ export default function App() {
       setSelectedTags([...selectedTags, tag]);
     }
   };
-  
+
   const handleAddCustomTag = () => {
-    if (customTag.trim() && !selectedTags.includes(customTag.trim())) {
-      const tagName = customTag.trim();
-      
-      // If this is a new tag not in our system, add it with a default color
-      if (!allTags.includes(tagName)) {
-        const colors = ['blue', 'green', 'purple', 'red', 'indigo', 'pink', 'teal'];
-        const randomColor = colors[Math.floor(Math.random() * colors.length)];
-        const tagColor = `bg-${randomColor}-100 text-${randomColor}-700`;
-        
-        setAllTags([...allTags, tagName]);
-        setTagColors({...tagColors, [tagName]: tagColor});
-      }
-      
-      setSelectedTags([...selectedTags, tagName]);
-      setCustomTag("");
+    const customTag = document.getElementById("customTagInput")?.value?.trim();
+    if (customTag && !selectedTags.includes(customTag)) {
+      setSelectedTags([...selectedTags, customTag]);
+      document.getElementById("customTagInput").value = "";
     }
   };
-  
+
+  // Modal Functions
+  const openTitleModal = (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    setCurrentTaskId(taskId);
+    setModalType("title");
+    setEditTitle(task.title);
+    setEditPriority(task.priority || "Medium");
+  };
+
+  const openTagModal = (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    setCurrentTaskId(taskId);
+    setModalType("tag");
+    setSelectedTags([...task.tags]);
+  };
+
+  const openStepModal = (taskId, index) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    setCurrentTaskId(taskId);
+    setStepIndex(index);
+    setModalType("step");
+    
+    if (index >= 0 && task.steps[index]) {
+      setEditingStep({
+        label: task.steps[index].label || "",
+        status: task.steps[index].status || "todo",
+        note: task.steps[index].note || "",
+        deadline: task.steps[index].deadline || ""
+      });
+    } else {
+      setNewStepName("");
+    }
+  };
+
+  const closeModal = () => {
+    setModalType(null);
+    setCurrentTaskId(null);
+    setStepIndex(null);
+  };
+
   // Filter tasks
   const filteredTasks = tasks.filter(task => {
     // Filter by tag
@@ -605,293 +311,7 @@ export default function App() {
     
     return true;
   });
-  
-  // Render step modal
-  const renderStepModal = () => {
-    const isNewStep = selectedStepIndex === -1;
-    
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-        <div className="bg-white p-6 rounded shadow w-full max-w-md">
-          <h2 className="text-xl font-semibold mb-4">
-            {isNewStep ? "Add Steps" : "Edit Step"}
-          </h2>
-          
-          {isNewStep ? (
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Step Name
-              </label>
-              <input 
-                type="text"
-                className="w-full border p-2 rounded" 
-                value={newStep} 
-                onChange={(e) => setNewStep(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && newStep.trim()) {
-                    addStepToTask();
-                  }
-                }}
-              />
-            </div>
-          ) : (
-            <>
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Step Name
-                </label>
-                <input 
-                  type="text"
-                  className="w-full border p-2 rounded" 
-                  value={editingStep.label} 
-                  onChange={(e) => setEditingStep({...editingStep, label: e.target.value})}
-                />
-              </div>
-              
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes
-                </label>
-                <textarea 
-                  className="w-full border p-2 rounded" 
-                  value={editingStep.note} 
-                  onChange={(e) => setEditingStep({...editingStep, note: e.target.value})}
-                />
-              </div>
-              
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Deadline
-                </label>
-                <input 
-                  type="date" 
-                  className="w-full border p-2 rounded" 
-                  value={editingStep.deadline || ""} 
-                  onChange={(e) => setEditingStep({...editingStep, deadline: e.target.value})}
-                />
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select 
-                  className="w-full border p-2 rounded" 
-                  value={editingStep.status} 
-                  onChange={(e) => setEditingStep({...editingStep, status: e.target.value})}
-                >
-                  <option value="todo">Not Started</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="done">Complete</option>
-                  <option value="on-hold">On Hold</option>
-                </select>
-              </div>
-            </>
-          )}
-          
-          <div className="flex justify-between mt-4">
-            {isNewStep ? (
-              <>
-                <button 
-                  className="bg-gray-300 text-gray-800 px-4 py-2 rounded" 
-                  onClick={closeModal}
-                >
-                  Done
-                </button>
-                <button 
-                  className="bg-blue-500 text-white px-4 py-2 rounded" 
-                  onClick={addStepToTask}
-                >
-                  Add Step
-                </button>
-              </>
-            ) : (
-              <>
-                <button 
-                  className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" 
-                  onClick={removeStep}
-                >
-                  Delete
-                </button>
-                <button 
-                  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" 
-                  onClick={updateStep}
-                >
-                  Save
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  // Render title modal
-  const renderTitleModal = () => {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-        <div className="bg-white p-6 rounded shadow w-full max-w-md">
-          <h2 className="text-xl font-semibold mb-4">Edit Task</h2>
-          
-          <div className="mb-3">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Task Title
-            </label>
-            <input 
-              type="text"
-              className="w-full border p-2 rounded mb-4" 
-              value={editTitle} 
-              onChange={(e) => setEditTitle(e.target.value)} 
-            />
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Priority
-            </label>
-            <select 
-              className="w-full border p-2 rounded" 
-              value={editPriority} 
-              onChange={(e) => setEditPriority(e.target.value)}
-            >
-              <option value="Low">Low Priority</option>
-              <option value="Medium">Medium Priority</option>
-              <option value="High">High Priority</option>
-            </select>
-          </div>
-          
-          <div className="flex justify-between mt-4">
-            <button 
-              className="bg-red-500 text-white px-3 py-2 rounded" 
-              onClick={deleteTask}
-            >
-              Delete Task
-            </button>
-            <div>
-              <button 
-                className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2" 
-                onClick={closeModal}
-              >
-                Cancel
-              </button>
-              <button 
-                className="bg-blue-500 text-white px-3 py-2 rounded" 
-                onClick={updateTitle}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
-  // Render tag modal
-  const renderTagModal = () => {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-        <div className="bg-white p-6 rounded shadow w-full max-w-md">
-          <h2 className="text-xl font-semibold mb-4">Edit Tags</h2>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Available Tags
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {allTags.map((tag, i) => (
-                <div 
-                  key={i}
-                  onClick={() => handleTagToggle(tag)}
-                  className={`px-3 py-1 rounded cursor-pointer text-sm ${
-                    selectedTags.includes(tag) 
-                      ? tagColors[tag] || "bg-gray-300 text-gray-800" 
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {tag}
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Add Tag
-            </label>
-            <div className="flex">
-              <input 
-                type="text"
-                className="border rounded-l px-3 py-1 flex-grow" 
-                placeholder="New tag name..." 
-                value={customTag} 
-                onChange={(e) => setCustomTag(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddCustomTag()}
-              />
-              <button 
-                onClick={handleAddCustomTag}
-                className="bg-blue-500 text-white px-3 py-1 rounded-r"
-              >
-                Add
-              </button>
-            </div>
-          </div>
-          
-          <button
-            className="text-sm text-blue-600 hover:underline mb-4"
-            onClick={() => {
-              setModalType("tagManager");
-            }}
-          >
-            Manage Tags
-          </button>
-          
-          {selectedTags.length > 0 && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Selected Tags
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {selectedTags.map((tag, i) => (
-                  <div 
-                    key={i}
-                    className={`px-3 py-1 rounded text-sm flex items-center ${
-                      tagColors[tag] || "bg-gray-200 text-gray-800"
-                    }`}
-                  >
-                    {tag}
-                    <span 
-                      className="ml-2 cursor-pointer" 
-                      onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
-                    >
-                      ×
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="flex justify-end mt-4">
-            <button 
-              className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2" 
-              onClick={closeModal}
-            >
-              Cancel
-            </button>
-            <button 
-              className="bg-blue-500 text-white px-3 py-2 rounded" 
-              onClick={updateTags}
-            >
-              Save Tags
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
+
   return (
     <div className="max-w-4xl mx-auto mt-10 p-4 bg-white shadow rounded">
       <h1 className="text-2xl font-bold mb-6">Task Tracker</h1>
@@ -931,23 +351,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Tag Manager Button */}
-      <div className="mb-4 flex justify-end">
-        <button
-          className="text-sm text-blue-600 hover:underline flex items-center"
-          onClick={() => {
-            setEditingTag(null);
-            setNewTagName("");
-            setModalType("tagManager");
-          }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
-          </svg>
-          Manage Tags
-        </button>
-      </div>
-
       {/* Filters */}
       <div className="mb-6 flex flex-wrap gap-3">
         <select 
@@ -956,7 +359,7 @@ export default function App() {
           onChange={e => setFilter({...filter, tag: e.target.value})}
         >
           <option value="">All Tags</option>
-          {allTags.map(tag => (
+          {DEFAULT_TAGS.map(tag => (
             <option key={tag} value={tag}>{tag}</option>
           ))}
         </select>
@@ -996,7 +399,7 @@ export default function App() {
             <TaskRow
               key={task.id}
               task={task}
-              onStepClick={(stepIndex) => openStepModal(task.id, stepIndex)}
+              onStepClick={(index) => openStepModal(task.id, index)}
               onTitleClick={() => openTitleModal(task.id)}
               onTagClick={() => openTagModal(task.id)}
             />
@@ -1004,11 +407,272 @@ export default function App() {
         )}
       </div>
 
-      {/* Modals */}
-      {modalType === "step" && renderStepModal()}
-      {modalType === "title" && renderTitleModal()}
-      {modalType === "tag" && renderTagModal()}
-      {modalType === "tagManager" && renderTagManagerModal()}
+      {/* Title Modal */}
+      {modalType === "title" && getCurrentTask() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Edit Task</h2>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Task Title
+              </label>
+              <input 
+                type="text"
+                className="w-full border p-2 rounded mb-4" 
+                value={editTitle} 
+                onChange={(e) => setEditTitle(e.target.value)} 
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Priority
+              </label>
+              <select 
+                className="w-full border p-2 rounded" 
+                value={editPriority} 
+                onChange={(e) => setEditPriority(e.target.value)}
+              >
+                <option value="Low">Low Priority</option>
+                <option value="Medium">Medium Priority</option>
+                <option value="High">High Priority</option>
+              </select>
+            </div>
+            
+            <div className="flex justify-between mt-4">
+              <button 
+                className="bg-red-500 text-white px-3 py-2 rounded" 
+                onClick={deleteTask}
+              >
+                Delete Task
+              </button>
+              <div>
+                <button 
+                  className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2" 
+                  onClick={closeModal}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="bg-blue-500 text-white px-3 py-2 rounded" 
+                  onClick={updateTaskTitle}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tag Modal */}
+      {modalType === "tag" && getCurrentTask() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Edit Tags</h2>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Available Tags
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {DEFAULT_TAGS.map((tag, i) => (
+                  <div 
+                    key={i}
+                    onClick={() => handleTagToggle(tag)}
+                    className={`px-3 py-1 rounded cursor-pointer text-sm ${
+                      selectedTags.includes(tag) 
+                        ? DEFAULT_TAG_COLORS[tag] || "bg-gray-300 text-gray-800" 
+                        : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Add Custom Tag
+              </label>
+              <div className="flex">
+                <input 
+                  id="customTagInput"
+                  type="text"
+                  className="border rounded-l px-3 py-1 flex-grow" 
+                  placeholder="New tag name..." 
+                />
+                <button 
+                  onClick={handleAddCustomTag}
+                  className="bg-blue-500 text-white px-3 py-1 rounded-r"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+            
+            {selectedTags.length > 0 && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Selected Tags
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedTags.map((tag, i) => (
+                    <div 
+                      key={i}
+                      className={`px-3 py-1 rounded text-sm flex items-center ${
+                        DEFAULT_TAG_COLORS[tag] || "bg-gray-200 text-gray-800"
+                      }`}
+                    >
+                      {tag}
+                      <span 
+                        className="ml-2 cursor-pointer" 
+                        onClick={() => setSelectedTags(selectedTags.filter(t => t !== tag))}
+                      >
+                        ×
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            <div className="flex justify-end mt-4">
+              <button 
+                className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2" 
+                onClick={closeModal}
+              >
+                Cancel
+              </button>
+              <button 
+                className="bg-blue-500 text-white px-3 py-2 rounded" 
+                onClick={updateTaskTags}
+              >
+                Save Tags
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step Modal */}
+      {modalType === "step" && getCurrentTask() && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              {stepIndex === -1 ? "Add Steps" : "Edit Step"}
+            </h2>
+            
+            {stepIndex === -1 ? (
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Step Name
+                </label>
+                <input 
+                  type="text"
+                  className="w-full border p-2 rounded" 
+                  value={newStepName} 
+                  onChange={(e) => setNewStepName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newStepName.trim()) {
+                      addStep();
+                    }
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Step Name
+                  </label>
+                  <input 
+                    type="text"
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.label} 
+                    onChange={(e) => setEditingStep({...editingStep, label: e.target.value})}
+                  />
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.note} 
+                    onChange={(e) => setEditingStep({...editingStep, note: e.target.value})}
+                  />
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Deadline
+                  </label>
+                  <input 
+                    type="date" 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.deadline || ""} 
+                    onChange={(e) => setEditingStep({...editingStep, deadline: e.target.value})}
+                  />
+                </div>
+                
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select 
+                    className="w-full border p-2 rounded" 
+                    value={editingStep.status} 
+                    onChange={(e) => setEditingStep({...editingStep, status: e.target.value})}
+                  >
+                    <option value="todo">Not Started</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="done">Complete</option>
+                    <option value="on-hold">On Hold</option>
+                  </select>
+                </div>
+              </>
+            )}
+            
+            <div className="flex justify-between mt-4">
+              {stepIndex === -1 ? (
+                <>
+                  <button 
+                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded" 
+                    onClick={closeModal}
+                  >
+                    Done
+                  </button>
+                  <button 
+                    className="bg-blue-500 text-white px-4 py-2 rounded" 
+                    onClick={addStep}
+                  >
+                    Add Step
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600" 
+                    onClick={deleteStep}
+                  >
+                    Delete
+                  </button>
+                  <button 
+                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600" 
+                    onClick={updateStep}
+                  >
+                    Save
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
