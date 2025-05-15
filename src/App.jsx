@@ -1,12 +1,266 @@
-import React, { useState, useEffect } from "react";
+  // Render tag manager modal
+  const renderTagManagerModal = () => {
+    const colorOptions = ['blue', 'green', 'red', 'yellow', 'purple', 'pink', 'indigo', 'teal', 'orange', 'gray'];
+    const shadeOptions = ['100', '200', '300', '400', '500', '600', '700', '800', '900'];
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-30">
+        <div className="bg-white p-6 rounded shadow w-full max-w-md max-h-[80vh] overflow-y-auto">
+          <h2 className="text-xl font-semibold mb-4">Tag Manager</h2>
+          
+          {/* Tag Creator Form */}
+          <div className="mb-6 p-4 bg-gray-50 rounded">
+            <h3 className="text-lg font-medium mb-3">
+              {editingTag ? `Edit Tag: ${editingTag}` : 'Create New Tag'}
+            </h3>
+            
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tag Name
+              </label>
+              <input 
+                type="text"
+                className="w-full border p-2 rounded" 
+                placeholder="Tag name..." 
+                value={newTagName} 
+                onChange={(e) => setNewTagName(e.target.value)}
+                disabled={editingTag && defaultTags.includes(editingTag)}
+              />
+              {editingTag && defaultTags.includes(editingTag) && (
+                <p className="text-xs text-orange-500 mt-1">
+                  Default tag names cannot be changed
+                </p>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Color
+                </label>
+                <select 
+                  className="w-full border p-2 rounded" 
+                  value={newTagColor} 
+                  onChange={(e) => setNewTagColor(e.target.value)}
+                >
+                  {colorOptions.map(color => (
+                    <option key={color} value={color}>{color}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Background Shade
+                </label>
+                <select 
+                  className="w-full border p-2 rounded" 
+                  value={newTagShade} 
+                  onChange={(e) => setNewTagShade(e.target.value)}
+                >
+                  {shadeOptions.map(shade => (
+                    <option key={shade} value={shade}>{shade}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Text Shade
+              </label>
+              <select 
+                className="w-full border p-2 rounded" 
+                value={newTagTextShade} 
+                onChange={(e) => setNewTagTextShade(e.target.value)}
+              >
+                {shadeOptions.map(shade => (
+                  <option key={shade} value={shade}>{shade}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preview
+              </label>
+              <div className={`inline-block px-3 py-1 rounded text-sm bg-${newTagColor}-${newTagShade} text-${newTagColor}-${newTagTextShade}`}>
+                {newTagName || "Tag Preview"}
+              </div>
+            </div>
+            
+            <div className="flex justify-end">
+              {editingTag && (
+                <button
+                  className="mr-auto bg-red-500 text-white px-3 py-2 rounded"
+                  onClick={() => {
+                    if (!defaultTags.includes(editingTag)) {
+                      deleteTag(editingTag);
+                    }
+                  }}
+                  disabled={defaultTags.includes(editingTag)}
+                >
+                  Delete
+                </button>
+              )}
+              
+              <button
+                className="bg-gray-300 text-gray-800 px-3 py-2 rounded mr-2"
+                onClick={() => {
+                  setEditingTag(null);
+                  setNewTagName("");
+                }}
+              >
+                Cancel
+              </button>
+              
+              <button
+                className="bg-blue-500 text-white px-3 py-2 rounded"
+                onClick={addCustomTag}
+                disabled={!newTagName.trim()}
+              >
+                {editingTag ? 'Update' : 'Create'}
+              </button>
+            </div>
+          </div>
+          
+          {/* Tag List */}
+          <div className="mb-6">
+            <h3 className="text-lg font-medium mb-3">Your Tags</h3>
+            
+            <div className="space-y-2">
+              {allTags.map((tag) => (
+                <div 
+                  key={tag}
+                  className="flex items-center justify-between p-2 border rounded hover:bg-gray-50"
+                >
+                  <div className="flex items-center">
+                    <span className={`px-3 py-1 rounded text-sm mr-3 ${tagColors[tag] || "bg-gray-200 text-gray-800"}`}>
+                      {tag}
+                    </span>
+                    {defaultTags.includes(tag) && (
+                      <span className="text-xs text-gray-500">Default</span>
+                    )}
+                  </div>
+                  
+                  <button
+                    className="text-blue-600 hover:text-blue-800"
+                    onClick={() => startEditingTag(tag)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              className="bg-blue-500 text-white px-4 py-2 rounded"
+              onClick={() => {
+                setModalType(currentTaskId ? "tag" : null);
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };  // Add a custom tag
+  const addCustomTag = () => {
+    if (!newTagName.trim() || allTags.includes(newTagName.trim())) {
+      return;
+    }
+    
+    const tagName = newTagName.trim();
+    const tagColor = `bg-${newTagColor}-${newTagShade} text-${newTagColor}-${newTagTextShade}`;
+    
+    // Update tags and colors
+    setAllTags([...allTags, tagName]);
+    setTagColors({...tagColors, [tagName]: tagColor});
+    
+    // Reset form
+    setNewTagName("");
+    
+    // If we're editing a tag, reset the editing state
+    if (editingTag) {
+      setEditingTag(null);
+    }
+  };
+  
+  // Delete a custom tag
+  const deleteTag = (tagName) => {
+    if (defaultTags.includes(tagName)) {
+      // Don't allow deleting default tags
+      return;
+    }
+    
+    // Update all tasks that use this tag
+    const updatedTasks = tasks.map(task => ({
+      ...task,
+      tags: task.tags.filter(tag => tag !== tagName)
+    }));
+    
+    // Remove tag from state
+    const updatedTagColors = {...tagColors};
+    delete updatedTagColors[tagName];
+    
+    setTasks(updatedTasks);
+    setAllTags(allTags.filter(tag => tag !== tagName));
+    setTagColors(updatedTagColors);
+    
+    // If editing this tag, reset editing state
+    if (editingTag === tagName) {
+      setEditingTag(null);
+    }
+  };
+  
+  // Start editing a tag
+  const startEditingTag = (tagName) => {
+    setEditingTag(tagName);
+    setNewTagName(tagName);
+    
+    // Parse current color
+    const colorClass = tagColors[tagName] || "";
+    const bgMatch = colorClass.match(/bg-(\w+)-(\d+)/);
+    const textMatch = colorClass.match(/text-(\w+)-(\d+)/);
+    
+    if (bgMatch && bgMatch.length >= 3) {
+      setNewTagColor(bgMatch[1]);
+      setNewTagShade(bgMatch[2]);
+    }
+    
+    if (textMatch && textMatch.length >= 3) {
+      setNewTagTextShade(textMatch[2]);
+    }
+  };import React, { useState, useEffect } from "react";
 
 // Constants
-const predefinedTags = ["Marketing", "Design", "Dev", "Research"];
-const tagColors = {
+const defaultTags = ["Marketing", "Design", "Dev", "Research"];
+const defaultTagColors = {
   Marketing: "bg-blue-100 text-blue-700",
   Design: "bg-pink-100 text-pink-700",
   Dev: "bg-green-100 text-green-700",
   Research: "bg-yellow-100 text-yellow-700"
+};
+
+// Load custom tags from localStorage
+const loadCustomTags = () => {
+  const saved = localStorage.getItem("customTags");
+  return saved ? JSON.parse(saved) : {};
+};
+
+// Load all tags (predefined + custom)
+const loadAllTags = () => {
+  const customTags = loadCustomTags();
+  return [...defaultTags, ...Object.keys(customTags).filter(tag => !defaultTags.includes(tag))];
+};
+
+// Load all tag colors (predefined + custom)
+const loadTagColors = () => {
+  const customTags = loadCustomTags();
+  return {...defaultTagColors, ...customTags};
 };
 
 const priorityColors = {
@@ -103,6 +357,11 @@ export default function App() {
   const [tasks, setTasks] = useState(loadTasks);
   const [filter, setFilter] = useState({ tag: "", status: "" });
   
+  // Tags state
+  const [allTags, setAllTags] = useState(loadAllTags);
+  const [tagColors, setTagColors] = useState(loadTagColors);
+  const [showTagManager, setShowTagManager] = useState(false);
+  
   // New task form state
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
@@ -126,10 +385,31 @@ export default function App() {
   const [selectedTags, setSelectedTags] = useState([]);
   const [customTag, setCustomTag] = useState("");
   
+  // Tag manager state
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("blue");
+  const [newTagShade, setNewTagShade] = useState("100");
+  const [newTagTextShade, setNewTagTextShade] = useState("700");
+  const [editingTag, setEditingTag] = useState(null);
+  
   // Save tasks to localStorage when they change
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
+  
+  // Save custom tags to localStorage when they change
+  useEffect(() => {
+    const customTags = {};
+    
+    // Extract only custom tags (not in defaultTags)
+    Object.keys(tagColors).forEach(tag => {
+      if (!defaultTags.includes(tag)) {
+        customTags[tag] = tagColors[tag];
+      }
+    });
+    
+    localStorage.setItem("customTags", JSON.stringify(customTags));
+  }, [tagColors]);
   
   // Helper to find current task
   const getCurrentTask = () => {
@@ -295,7 +575,19 @@ export default function App() {
   
   const handleAddCustomTag = () => {
     if (customTag.trim() && !selectedTags.includes(customTag.trim())) {
-      setSelectedTags([...selectedTags, customTag.trim()]);
+      const tagName = customTag.trim();
+      
+      // If this is a new tag not in our system, add it with a default color
+      if (!allTags.includes(tagName)) {
+        const colors = ['blue', 'green', 'purple', 'red', 'indigo', 'pink', 'teal'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        const tagColor = `bg-${randomColor}-100 text-${randomColor}-700`;
+        
+        setAllTags([...allTags, tagName]);
+        setTagColors({...tagColors, [tagName]: tagColor});
+      }
+      
+      setSelectedTags([...selectedTags, tagName]);
       setCustomTag("");
     }
   };
@@ -505,10 +797,10 @@ export default function App() {
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Predefined Tags
+              Available Tags
             </label>
             <div className="flex flex-wrap gap-2">
-              {predefinedTags.map((tag, i) => (
+              {allTags.map((tag, i) => (
                 <div 
                   key={i}
                   onClick={() => handleTagToggle(tag)}
@@ -526,13 +818,13 @@ export default function App() {
           
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Custom Tag
+              Add Tag
             </label>
             <div className="flex">
               <input 
                 type="text"
                 className="border rounded-l px-3 py-1 flex-grow" 
-                placeholder="Add custom tag..." 
+                placeholder="New tag name..." 
                 value={customTag} 
                 onChange={(e) => setCustomTag(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddCustomTag()}
@@ -545,6 +837,15 @@ export default function App() {
               </button>
             </div>
           </div>
+          
+          <button
+            className="text-sm text-blue-600 hover:underline mb-4"
+            onClick={() => {
+              setModalType("tagManager");
+            }}
+          >
+            Manage Tags
+          </button>
           
           {selectedTags.length > 0 && (
             <div className="mb-4">
@@ -630,6 +931,23 @@ export default function App() {
         </div>
       </div>
 
+      {/* Tag Manager Button */}
+      <div className="mb-4 flex justify-end">
+        <button
+          className="text-sm text-blue-600 hover:underline flex items-center"
+          onClick={() => {
+            setEditingTag(null);
+            setNewTagName("");
+            setModalType("tagManager");
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" />
+          </svg>
+          Manage Tags
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="mb-6 flex flex-wrap gap-3">
         <select 
@@ -638,7 +956,7 @@ export default function App() {
           onChange={e => setFilter({...filter, tag: e.target.value})}
         >
           <option value="">All Tags</option>
-          {predefinedTags.map(tag => (
+          {allTags.map(tag => (
             <option key={tag} value={tag}>{tag}</option>
           ))}
         </select>
@@ -690,6 +1008,7 @@ export default function App() {
       {modalType === "step" && renderStepModal()}
       {modalType === "title" && renderTitleModal()}
       {modalType === "tag" && renderTagModal()}
+      {modalType === "tagManager" && renderTagManagerModal()}
     </div>
   );
 }
