@@ -65,11 +65,6 @@ export default function App() {
   const [newTag, setNewTag] = useState("");
   const [newPriority, setNewPriority] = useState("Medium");
   
-  // Dark mode state
-  const [darkMode, setDarkMode] = useState(
-    localStorage.getItem("darkMode") === "true"
-  );
-  
   // Modal state
   const [currentTaskId, setCurrentTaskId] = useState(null);
   const [modalType, setModalType] = useState(null);
@@ -81,20 +76,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
-  
-  // Save dark mode preference
-  useEffect(() => {
-    localStorage.setItem("darkMode", darkMode.toString());
-  }, [darkMode]);
-
-  // For debugging purpose, log when modals open/close
-  useEffect(() => {
-    console.log("Modal state changed:", { 
-      modalType, 
-      currentTaskId, 
-      taskExists: currentTaskId ? Boolean(tasks.find(t => t.id === currentTaskId)) : false
-    });
-  }, [modalType, currentTaskId, tasks]);
 
   // Helper functions
   const getCurrentTask = () => tasks.find(t => t.id === currentTaskId);
@@ -112,9 +93,6 @@ export default function App() {
     const tags = newTag ? newTag.split(",").map(t => t.trim()).filter(Boolean) : [];
     const newTaskId = Date.now();
     
-    console.log("Creating task with ID:", newTaskId);
-    
-    // First update the state
     const newTask = { 
       id: newTaskId, 
       title: newTitle, 
@@ -123,20 +101,16 @@ export default function App() {
       priority: newPriority 
     };
     
-    // Update tasks state
     setTasks([newTask, ...tasks]);
-    
-    // Reset form fields
     setNewTitle("");
     setNewTag("");
     
-    // IMPORTANT: Use setTimeout to make sure the task is added before opening modal
+    // Open step modal with delay
     setTimeout(() => {
-      console.log("Now opening step modal for new task:", newTaskId);
       setCurrentTaskId(newTaskId);
       setStepIndex(-1);
       setModalType("step");
-    }, 100); // Slightly longer timeout to ensure state updates
+    }, 50);
   };
   
   const deleteTask = (taskId) => {
@@ -213,19 +187,11 @@ export default function App() {
   };
 
   return (
-    <div className={`max-w-4xl mx-auto p-4 ${darkMode ? 'bg-gray-800 text-white' : 'bg-white'} shadow rounded transition-colors duration-200`}>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Task Tracker</h1>
-        <button
-          onClick={() => setDarkMode(!darkMode)}
-          className={`px-3 py-1 rounded text-sm ${darkMode ? 'bg-gray-600 text-white' : 'bg-gray-200 text-gray-800'}`}
-        >
-          {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-        </button>
-      </div>
+    <div className="max-w-4xl mx-auto p-4 bg-white shadow rounded">
+      <h1 className="text-2xl font-bold mb-6">Task Tracker</h1>
       
       {/* Task Creation Form */}
-      <div className={`flex flex-wrap gap-2 mb-6 p-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-50'} rounded`}>
+      <div className="flex flex-wrap gap-2 mb-6 p-4 bg-gray-50 rounded">
         <input 
           type="text" 
           className="border px-3 py-2 rounded flex-grow" 
@@ -267,7 +233,7 @@ export default function App() {
           </div>
         ) : (
           tasks.map(task => (
-            <div key={task.id} className={`mb-6 p-3 border ${darkMode ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'} rounded hover:shadow-md transition-colors duration-200`}>
+            <div key={task.id} className="mb-6 p-3 border border-gray-200 rounded hover:shadow-md">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="font-semibold">
                   {task.title} 
@@ -275,47 +241,17 @@ export default function App() {
                     Priority: {task.priority || 'Medium'}
                   </span>
                 </h2>
-                <div className="flex items-center gap-3">
-                  <div className="flex gap-2">
-                    {task.tags.map((tag, i) => (
-                      <span 
-                        key={i}
-                        className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteTask(task.id);
-                    }} 
-                    className="text-gray-500 hover:text-red-600"
-                    title="Delete Task"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                <div className="flex gap-2">
+                  {task.tags.map((tag, i) => (
+                    <span 
+                      key={i}
+                      className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700"}`}
+                    >
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               </div>
-
-              {/* Task Progress Bar */}
-              {task.steps.length > 0 && (
-                <div className={`w-full ${darkMode ? 'bg-gray-600' : 'bg-gray-200'} h-2 rounded-full my-2`}>
-                  <div 
-                    className="bg-green-500 h-2 rounded-full" 
-                    style={{ 
-                      width: `${(task.steps.filter(s => s.status === 'done').length / 
-                              (task.steps.length || 1)) * 100}%` 
-                    }}
-                    title={`${Math.round((task.steps.filter(s => s.status === 'done').length / 
-                             (task.steps.length || 1)) * 100)}% complete`}
-                  ></div>
-                </div>
-              )}
-
               <div className="flex items-center space-x-6 overflow-x-auto py-2">
                 {task.steps.map((step, index) => (
                   <React.Fragment key={index}>
@@ -336,7 +272,12 @@ export default function App() {
                 </button>
               </div>
               <div className="flex justify-end mt-2">
-                {/* Removed text delete button since we now have the icon */}
+                <button 
+                  onClick={() => deleteTask(task.id)} 
+                  className="text-xs text-red-600 hover:text-red-800"
+                >
+                  Delete Task
+                </button>
               </div>
             </div>
           ))
@@ -346,7 +287,7 @@ export default function App() {
       {/* Step Modal */}
       {modalType === "step" && getCurrentTask() && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
-          <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white'} p-6 rounded shadow w-full max-w-md`}>
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">
               {stepIndex === -1 ? "Add Steps" : "Edit Step"}
             </h2>
