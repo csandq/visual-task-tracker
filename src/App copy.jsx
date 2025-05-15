@@ -8,10 +8,7 @@ const tagColors = {
   Research: "bg-yellow-100 text-yellow-700"
 };
 
-const loadTasks = () => {
-  const saved = localStorage.getItem("tasks");
-  if (saved) return JSON.parse(saved);
-  return [
+const initialTasks = [
   {
     id: 1,
     title: "Launch Campaign",
@@ -25,9 +22,6 @@ const loadTasks = () => {
     ]
   }
 ];
-};
-
-const initialTasks = loadTasks();
 
 const Step = ({ label, status, note, deadline, onClick }) => {
   const getColor = () => {
@@ -49,7 +43,7 @@ const Step = ({ label, status, note, deadline, onClick }) => {
 const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
   <div className="mb-6">
     <div className="flex items-center justify-between mb-1">
-      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>{task.title} <span className='text-xs text-white bg-gray-600 px-2 py-0.5 ml-2 rounded'>Priority: {task.priority || 'Medium'}</span></h2>
+      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>{task.title}</h2>
       <div className="flex gap-2">
         {task.tags.map((tag, i) => (
           <span key={i} onClick={() => onTagClick(task.id)} className={`text-xs px-2 py-0.5 rounded cursor-pointer ${tagColors[tag] || "bg-gray-100 text-gray-700"}`}>{tag}</span>
@@ -71,14 +65,6 @@ export default function App() {
   const [tasks, setTasks] = useState(initialTasks);
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
-  const [newPriority, setNewPriority] = useState("Medium");
-
-  React.useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
-  const [tasks, setTasks] = useState(initialTasks);
-  const [newTitle, setNewTitle] = useState("");
-  const [newTag, setNewTag] = useState("");
   const [stepModal, setStepModal] = useState(null);
   const [titleModal, setTitleModal] = useState(null);
   const [tagModal, setTagModal] = useState(null);
@@ -88,7 +74,7 @@ export default function App() {
   const addTask = () => {
     if (!newTitle.trim()) return;
     const tags = newTag.split(",").map(t => t.trim()).filter(Boolean);
-    const newTask = { id: tasks.length + 1, title: newTitle, tags, steps: [], priority: newPriority };
+    const newTask = { id: tasks.length + 1, title: newTitle, tags, steps: [] };
     setTasks([newTask, ...tasks]);
     setNewTitle("");
     setNewTag("");
