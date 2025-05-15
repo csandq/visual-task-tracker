@@ -8,10 +8,7 @@ const tagColors = {
   Research: "bg-yellow-100 text-yellow-700"
 };
 
-const loadTasks = () => {
-  const saved = localStorage.getItem("tasks");
-  if (saved) return JSON.parse(saved);
-  return [
+const initialTasks = [
   {
     id: 1,
     title: "Launch Campaign",
@@ -25,9 +22,6 @@ const loadTasks = () => {
     ]
   }
 ];
-};
-
-const initialTasks = loadTasks();
 
 const Step = ({ label, status, note, deadline, onClick }) => {
   const getColor = () => {
@@ -49,7 +43,11 @@ const Step = ({ label, status, note, deadline, onClick }) => {
 const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
   <div className="mb-6">
     <div className="flex items-center justify-between mb-1">
-      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>{task.title} <span className='text-xs text-white bg-gray-600 px-2 py-0.5 ml-2 rounded'>Priority: {task.priority || 'Medium'}</span></h2>
+      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>{task.title} <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+  task.priority === "High" ? "bg-red-200 text-red-800" :
+  task.priority === "Low" ? "bg-green-100 text-green-700" :
+  "bg-yellow-100 text-yellow-700"
+}`}>{task.priority || "Medium"}</span></h2>
       <div className="flex gap-2">
         {task.tags.map((tag, i) => (
           <span key={i} onClick={() => onTagClick(task.id)} className={`text-xs px-2 py-0.5 rounded cursor-pointer ${tagColors[tag] || "bg-gray-100 text-gray-700"}`}>{tag}</span>
@@ -68,14 +66,29 @@ const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
 );
 
 export default function App() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState([]);
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
   const [newPriority, setNewPriority] = useState("Medium");
+  const [stepModal, setStepModal] = useState(null);
+  const [titleModal, setTitleModal] = useState(null);
+  const [tagModal, setTagModal] = useState(null);
+  const [addStepModal, setAddStepModal] = useState(null);
+  const [newStep, setNewStep] = useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
+    const saved = localStorage.getItem("tasks");
+    if (saved) {
+      setTasks(JSON.parse(saved));
+    } else {
+      setTasks(initialTasks);
+    }
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
+
   const [tasks, setTasks] = useState(initialTasks);
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
@@ -136,7 +149,12 @@ export default function App() {
       <div className="flex flex-wrap gap-2 mb-6">
         <input type="text" className="border px-3 py-1 rounded flex-grow" placeholder="New task name..." value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="text" className="border px-3 py-1 rounded flex-grow" placeholder="Tags (comma-separated)" value={newTag} onChange={e => setNewTag(e.target.value)} />
-        <button onClick={addTask} className="bg-blue-500 text-white px-4 py-1 rounded">Add Task</button>
+        <select className="border px-3 py-1 rounded" value={newPriority} onChange={e => setNewPriority(e.target.value)}>
+  <option>High</option>
+  <option>Medium</option>
+  <option>Low</option>
+</select>
+<button onClick={addTask} className="bg-blue-500 text-white px-4 py-1 rounded">Add Task</button>
       </div>
 
       {tasks.map(task => (

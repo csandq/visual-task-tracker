@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const predefinedTags = ["Marketing", "Design", "Dev", "Research"];
 const tagColors = {
@@ -8,10 +8,11 @@ const tagColors = {
   Research: "bg-yellow-100 text-yellow-700"
 };
 
-const initialTasks = [
+const defaultTasks = [
   {
     id: 1,
     title: "Launch Campaign",
+    priority: "High",
     tags: ["Marketing"],
     steps: [
       { label: "Research", status: "done", note: "Checked competitors.", deadline: "2025-05-15" },
@@ -43,7 +44,16 @@ const Step = ({ label, status, note, deadline, onClick }) => {
 const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
   <div className="mb-6">
     <div className="flex items-center justify-between mb-1">
-      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>{task.title}</h2>
+      <h2 className="font-semibold cursor-pointer hover:underline" onClick={() => onTitleClick(task.id)}>
+        {task.title}
+        <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+          task.priority === "High" ? "bg-red-200 text-red-800" :
+          task.priority === "Low" ? "bg-green-100 text-green-700" :
+          "bg-yellow-100 text-yellow-700"
+        }`}>
+          {task.priority || "Medium"}
+        </span>
+      </h2>
       <div className="flex gap-2">
         {task.tags.map((tag, i) => (
           <span key={i} onClick={() => onTagClick(task.id)} className={`text-xs px-2 py-0.5 rounded cursor-pointer ${tagColors[tag] || "bg-gray-100 text-gray-700"}`}>{tag}</span>
@@ -62,58 +72,44 @@ const TaskRow = ({ task, onStepClick, onTitleClick, onTagClick }) => (
 );
 
 export default function App() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState([]);
   const [newTitle, setNewTitle] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [newPriority, setNewPriority] = useState("Medium");
   const [stepModal, setStepModal] = useState(null);
   const [titleModal, setTitleModal] = useState(null);
   const [tagModal, setTagModal] = useState(null);
   const [addStepModal, setAddStepModal] = useState(null);
   const [newStep, setNewStep] = useState("");
 
+  useEffect(() => {
+    const saved = localStorage.getItem("tasks");
+    if (saved) {
+      setTasks(JSON.parse(saved));
+    } else {
+      setTasks(defaultTasks);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+  }, [tasks]);
+
   const addTask = () => {
     if (!newTitle.trim()) return;
     const tags = newTag.split(",").map(t => t.trim()).filter(Boolean);
-    const newTask = { id: tasks.length + 1, title: newTitle, tags, steps: [] };
+    const newTask = {
+      id: Date.now(),
+      title: newTitle,
+      tags,
+      steps: [],
+      priority: newPriority
+    };
     setTasks([newTask, ...tasks]);
     setNewTitle("");
     setNewTag("");
+    setNewPriority("Medium");
     setAddStepModal(newTask.id);
-  };
-
-  const addStepToTask = (taskId, label) => {
-    if (!label.trim()) return;
-    setTasks(tasks.map(task => task.id === taskId ? {
-      ...task,
-      steps: [...task.steps, { label, status: "todo", note: "", deadline: "" }]
-    } : task));
-    setNewStep("");
-  };
-
-  const updateStep = (taskId, index, updatedStep) => {
-    setTasks(tasks.map(task => task.id === taskId ? {
-      ...task,
-      steps: task.steps.map((s, i) => i === index ? updatedStep : s)
-    } : task));
-    setStepModal(null);
-  };
-
-  const removeStep = (taskId, index) => {
-    setTasks(tasks.map(task => task.id === taskId ? {
-      ...task,
-      steps: task.steps.filter((_, i) => i !== index)
-    } : task));
-    setStepModal(null);
-  };
-
-  const updateTitle = (taskId, newTitle) => {
-    setTasks(tasks.map(task => task.id === taskId ? { ...task, title: newTitle } : task));
-    setTitleModal(null);
-  };
-
-  const updateTags = (taskId, newTags) => {
-    setTasks(tasks.map(task => task.id === taskId ? { ...task, tags: newTags } : task));
-    setTagModal(null);
   };
 
   return (
@@ -122,6 +118,11 @@ export default function App() {
       <div className="flex flex-wrap gap-2 mb-6">
         <input type="text" className="border px-3 py-1 rounded flex-grow" placeholder="New task name..." value={newTitle} onChange={e => setNewTitle(e.target.value)} />
         <input type="text" className="border px-3 py-1 rounded flex-grow" placeholder="Tags (comma-separated)" value={newTag} onChange={e => setNewTag(e.target.value)} />
+        <select className="border px-3 py-1 rounded" value={newPriority} onChange={e => setNewPriority(e.target.value)}>
+          <option>High</option>
+          <option>Medium</option>
+          <option>Low</option>
+        </select>
         <button onClick={addTask} className="bg-blue-500 text-white px-4 py-1 rounded">Add Task</button>
       </div>
 
