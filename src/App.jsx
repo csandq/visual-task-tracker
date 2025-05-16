@@ -1,4 +1,5 @@
-        {/* Tag Editor Modal */}
+);
+}        {/* Tag Editor Modal */}
         {isTagEditorOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
             <div className="bg-white dark:bg-gray-800 p-6 rounded shadow w-full max-w-md transition-colors duration-200">
@@ -781,6 +782,213 @@ export default function App() {
                     >
                       Delete
                     </button>
+                    <button 
+                      className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200" 
+                      onClick={updateStep}
+                    >
+                      Save
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Task Edit Modal */}
+        {modalType === "task" && getCurrentTask() && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow w-full max-w-md transition-colors duration-200">
+              <h2 className="text-xl font-semibold mb-4 dark:text-white">
+                Edit Task
+              </h2>
+              
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Task Title
+                </label>
+                <input 
+                  type="text"
+                  className="w-full border p-2 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600" 
+                  value={editingTask.title} 
+                  onChange={(e) => setEditingTask({...editingTask, title: e.target.value})}
+                />
+              </div>
+              
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Priority
+                </label>
+                <select 
+                  className="w-full border p-2 rounded bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600" 
+                  value={editingTask.priority} 
+                  onChange={(e) => setEditingTask({...editingTask, priority: e.target.value})}
+                >
+                  <option value="Low">Low Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="High">High Priority</option>
+                </select>
+              </div>
+              
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Tags
+                </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {editingTask.tags.map((tag, index) => (
+                    <div 
+                      key={index} 
+                      className={`text-xs px-2 py-1 rounded flex items-center ${customTags[tag] || "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
+                    >
+                      {tag}
+                      <button 
+                        className="ml-1 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                        onClick={() => removeTagFromEditingTask(index)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    className="border p-2 rounded flex-grow bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600" 
+                    placeholder="Add tags (comma-separated)" 
+                    value={editTagInput} 
+                    onChange={(e) => setEditTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && editTagInput.trim()) {
+                        addTagToEditingTask();
+                      }
+                    }}
+                  />
+                  <button 
+                    className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-200" 
+                    onClick={addTagToEditingTask}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex justify-between mt-4">
+                <button 
+                  className="bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors duration-200" 
+                  onClick={closeModal}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200" 
+                  onClick={updateTask}
+                  disabled={!editingTask.title.trim()}
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tag Editor Modal */}
+        {isTagEditorOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow w-full max-w-md transition-colors duration-200">
+              <h2 className="text-xl font-semibold mb-4 dark:text-white">
+                Manage Tags
+              </h2>
+              
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                  Current Tags
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {Object.keys(customTags).map((tagName) => (
+                    <div 
+                      key={tagName} 
+                      className={`text-xs px-2 py-1 rounded flex items-center ${customTags[tagName]}`}
+                    >
+                      {tagName}
+                      <button 
+                        className="ml-1 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                        onClick={() => removeCustomTag(tagName)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {Object.keys(customTags).length === 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No custom tags yet. Create one below.</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                  Add New Tag
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input 
+                    type="text"
+                    className="border p-2 rounded w-full bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+                    placeholder="Tag name"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                  />
+                  
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Select Color
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['blue', 'green', 'red', 'yellow', 'purple', 'pink', 'indigo', 'gray'].map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-full p-2 rounded text-center text-xs capitalize ${
+                            selectedColor === color 
+                              ? BUTTON_COLOR_CLASSES[color].selected
+                              : BUTTON_COLOR_CLASSES[color].default
+                          }`}
+                          onClick={() => setSelectedColor(color)}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-2">
+                    <div className="text-sm mb-1 text-gray-700 dark:text-gray-300">Preview:</div>
+                    <div className={`inline-block text-xs px-2 py-1 rounded ${COLOR_CLASSES[selectedColor]}`}>
+                      {newTagName || "Tag Preview"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between mt-4">
+                <button 
+                  className="bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors duration-200" 
+                  onClick={() => setIsTagEditorOpen(false)}
+                >
+                  Close
+                </button>
+                <button 
+                  className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200" 
+                  onClick={addCustomTag}
+                  disabled={!newTagName.trim()}
+                >
+                  Add Tag
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
                     <button 
                       className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200" 
                       onClick={updateStep}
