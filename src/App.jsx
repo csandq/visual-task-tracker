@@ -1,6 +1,12 @@
-/* Add this at the top of your file to ensure dark mode styling works */
-import "./index.css";
-import React, { useState, useEffect } from "react";
+  // Effect to update when darkMode state changes
+  useEffect(() => {
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
+    
+    // Update class on html element
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);import React, { useState, useEffect } from "react";
+// Import CSS from the correct location
+import "./styles/index.css";
 
 // Simple constants
 const PRIORITY_COLORS = {
