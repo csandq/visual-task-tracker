@@ -1,35 +1,6 @@
-  // Apply dark mode directly on mount
-  useEffect(() => {
-    // Check if dark mode is enabled in localStorage
-    const savedMode = localStorage.getItem("darkMode");
-    const isDarkMode = savedMode !== null ? JSON.parse(savedMode) : 
-      window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    
-    // Apply dark mode immediately
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    
-    // Initialize state
-    setDarkMode(isDarkMode);
-  }, []);  // Effect to update when darkMode state changes
-  useEffect(() => {
-    localStorage.setItem("darkMode", JSON.stringify(darkMode));
-    
-    // Update class on html element
-    document.documentElement.classList.toggle('dark', darkMode);
-  }, [darkMode]);import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 // Import CSS from the correct location
 import "./styles/index.css";
-
-// Simple constants
-const PRIORITY_COLORS = {
-  High: "bg-red-600",
-  Medium: "bg-gray-600",
-  Low: "bg-green-600"
-};
 
 // Simple constants
 const PRIORITY_COLORS = {
@@ -149,7 +120,7 @@ export default function App() {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
   
-  // Apply dark mode directly in a script tag at the top of the app
+  // Apply dark mode directly on mount
   useEffect(() => {
     // Check if dark mode is enabled in localStorage
     const savedMode = localStorage.getItem("darkMode");
@@ -166,6 +137,14 @@ export default function App() {
     // Initialize state
     setDarkMode(isDarkMode);
   }, []);
+  
+  // Effect to update when darkMode state changes
+  useEffect(() => {
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
+    
+    // Update class on html element
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
   
   // Toggle dark mode
   const toggleDarkMode = () => {
