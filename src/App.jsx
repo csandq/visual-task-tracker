@@ -55,8 +55,8 @@
                           type="button"
                           className={`w-full p-2 rounded text-center text-xs capitalize ${
                             selectedColor === color 
-                              ? `bg-${color}-500 text-white` 
-                              : `bg-${color}-100 text-${color}-700 hover:bg-${color}-200`
+                              ? BUTTON_COLOR_CLASSES[color].selected
+                              : BUTTON_COLOR_CLASSES[color].default
                           }`}
                           onClick={() => setSelectedColor(color)}
                         >
@@ -66,9 +66,9 @@
                     </div>
                   </div>
                   
-                  <div className="mt-2">
+                                      <div className="mt-2">
                     <div className="text-sm mb-1 text-gray-700 dark:text-gray-300">Preview:</div>
-                    <div className={`inline-block text-xs px-2 py-1 rounded bg-${selectedColor}-100 text-${selectedColor}-700 dark:bg-${selectedColor}-900 dark:text-${selectedColor}-300`}>
+                    <div className={`inline-block text-xs px-2 py-1 rounded ${COLOR_CLASSES[selectedColor]}`}>
                       {newTagName || "Tag Preview"}
                     </div>
                   </div>
@@ -96,8 +96,8 @@
   const addCustomTag = () => {
     if (!newTagName.trim()) return;
     
-    // Create a color class based on the selected color
-    const colorClass = `bg-${selectedColor}-100 text-${selectedColor}-700 dark:bg-${selectedColor}-900 dark:text-${selectedColor}-300`;
+    // Use the predefined color class instead of dynamic string concatenation
+    const colorClass = COLOR_CLASSES[selectedColor];
     
     setCustomTags({
       ...customTags,
@@ -134,6 +134,54 @@ const TAG_COLORS = {
   Design: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300",
   Dev: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
   Research: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+};
+
+// Pre-defined color classes for tag editor
+const COLOR_CLASSES = {
+  blue: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  green: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  red: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+  yellow: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  purple: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
+  pink: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300",
+  indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300",
+  gray: "bg-gray-100 text-gray-700 dark:bg-gray-900 dark:text-gray-300"
+};
+
+// Button color classes for the color selector
+const BUTTON_COLOR_CLASSES = {
+  blue: {
+    selected: "bg-blue-500 text-white",
+    default: "bg-blue-100 text-blue-700 hover:bg-blue-200"
+  },
+  green: {
+    selected: "bg-green-500 text-white",
+    default: "bg-green-100 text-green-700 hover:bg-green-200"
+  },
+  red: {
+    selected: "bg-red-500 text-white",
+    default: "bg-red-100 text-red-700 hover:bg-red-200"
+  },
+  yellow: {
+    selected: "bg-yellow-500 text-white",
+    default: "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+  },
+  purple: {
+    selected: "bg-purple-500 text-white",
+    default: "bg-purple-100 text-purple-700 hover:bg-purple-200"
+  },
+  pink: {
+    selected: "bg-pink-500 text-white",
+    default: "bg-pink-100 text-pink-700 hover:bg-pink-200"
+  },
+  indigo: {
+    selected: "bg-indigo-500 text-white",
+    default: "bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+  },
+  gray: {
+    selected: "bg-gray-500 text-white",
+    default: "bg-gray-100 text-gray-700 hover:bg-gray-200"
+  }
 };
 
 // Load from localStorage or use defaults
