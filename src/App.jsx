@@ -1,4 +1,124 @@
-import React, { useState, useEffect } from "react";
+        {/* Tag Editor Modal */}
+        {isTagEditorOpen && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-20">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded shadow w-full max-w-md transition-colors duration-200">
+              <h2 className="text-xl font-semibold mb-4 dark:text-white">
+                Manage Tags
+              </h2>
+              
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                  Current Tags
+                </div>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {Object.keys(customTags).map((tagName) => (
+                    <div 
+                      key={tagName} 
+                      className={`text-xs px-2 py-1 rounded flex items-center ${customTags[tagName]}`}
+                    >
+                      {tagName}
+                      <button 
+                        className="ml-1 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+                        onClick={() => removeCustomTag(tagName)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {Object.keys(customTags).length === 0 && (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No custom tags yet. Create one below.</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <div className="mb-2 font-medium text-gray-700 dark:text-gray-300">
+                  Add New Tag
+                </div>
+                <div className="flex flex-col gap-2">
+                  <input 
+                    type="text"
+                    className="border p-2 rounded w-full bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600"
+                    placeholder="Tag name"
+                    value={newTagName}
+                    onChange={(e) => setNewTagName(e.target.value)}
+                  />
+                  
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Select Color
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['blue', 'green', 'red', 'yellow', 'purple', 'pink', 'indigo', 'gray'].map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={`w-full p-2 rounded text-center text-xs capitalize ${
+                            selectedColor === color 
+                              ? `bg-${color}-500 text-white` 
+                              : `bg-${color}-100 text-${color}-700 hover:bg-${color}-200`
+                          }`}
+                          onClick={() => setSelectedColor(color)}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-2">
+                    <div className="text-sm mb-1 text-gray-700 dark:text-gray-300">Preview:</div>
+                    <div className={`inline-block text-xs px-2 py-1 rounded bg-${selectedColor}-100 text-${selectedColor}-700 dark:bg-${selectedColor}-900 dark:text-${selectedColor}-300`}>
+                      {newTagName || "Tag Preview"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between mt-4">
+                <button 
+                  className="bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors duration-200" 
+                  onClick={() => setIsTagEditorOpen(false)}
+                >
+                  Close
+                </button>
+                <button 
+                  className="bg-blue-500 dark:bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors duration-200" 
+                  onClick={addCustomTag}
+                  disabled={!newTagName.trim()}
+                >
+                  Add Tag
+                </button>
+              </div>
+            </div>
+          </div>
+        )}  // Add a new custom tag
+  const addCustomTag = () => {
+    if (!newTagName.trim()) return;
+    
+    // Create a color class based on the selected color
+    const colorClass = `bg-${selectedColor}-100 text-${selectedColor}-700 dark:bg-${selectedColor}-900 dark:text-${selectedColor}-300`;
+    
+    setCustomTags({
+      ...customTags,
+      [newTagName]: colorClass
+    });
+    
+    setNewTagName("");
+  };
+  
+  // Remove a custom tag
+  const removeCustomTag = (tagName) => {
+    const updatedTags = { ...customTags };
+    delete updatedTags[tagName];
+    setCustomTags(updatedTags);
+  };  // Task editing state
+  const [editingTask, setEditingTask] = useState({
+    title: "",
+    tags: [],
+    priority: "Medium"
+  });
+  const [editTagInput, setEditTagInput] = useState("");import React, { useState, useEffect } from "react";
 // Import CSS from the correct location
 import "./styles/index.css";
 
@@ -107,13 +227,24 @@ export default function App() {
   const [editingStep, setEditingStep] = useState({ label: "", status: "todo", note: "", deadline: "" });
   const [newStepName, setNewStepName] = useState("");
   
-  // Task editing state
-  const [editingTask, setEditingTask] = useState({
-    title: "",
-    tags: [],
-    priority: "Medium"
+  // State for custom tags management
+  const [customTags, setCustomTags] = useState(() => {
+    try {
+      const saved = localStorage.getItem("customTags");
+      return saved ? JSON.parse(saved) : TAG_COLORS;
+    } catch (error) {
+      console.error("Error loading custom tags:", error);
+      return TAG_COLORS;
+    }
   });
-  const [editTagInput, setEditTagInput] = useState("");
+  const [isTagEditorOpen, setIsTagEditorOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [selectedColor, setSelectedColor] = useState("blue");
+  
+  // Save custom tags to localStorage
+  useEffect(() => {
+    localStorage.setItem("customTags", JSON.stringify(customTags));
+  }, [customTags]);
   
   // Save to localStorage
   useEffect(() => {
@@ -130,12 +261,17 @@ export default function App() {
     // Apply dark mode immediately
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      document.querySelector('html')?.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.querySelector('html')?.classList.remove('dark');
     }
     
     // Initialize state
     setDarkMode(isDarkMode);
+    
+    console.log("Initial dark mode set to:", isDarkMode);
+    console.log("HTML classes:", document.querySelector('html')?.classList.value);
   }, []);
   
   // Effect to update when darkMode state changes
@@ -143,7 +279,23 @@ export default function App() {
     localStorage.setItem("darkMode", JSON.stringify(darkMode));
     
     // Update class on html element
-    document.documentElement.classList.toggle('dark', darkMode);
+    const htmlElement = document.querySelector('html');
+    if (htmlElement) {
+      if (darkMode) {
+        htmlElement.classList.add('dark');
+      } else {
+        htmlElement.classList.remove('dark');
+      }
+    }
+    
+    // Also update documentElement
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    console.log("Dark mode updated to:", darkMode);
   }, [darkMode]);
   
   // Toggle dark mode
@@ -151,13 +303,36 @@ export default function App() {
     const newDarkMode = !darkMode;
     setDarkMode(newDarkMode);
     
-    // Apply directly to HTML element
-    document.documentElement.classList.toggle('dark', newDarkMode);
+    // Apply to HTML element - explicitly target the html element
+    const htmlElement = document.querySelector('html');
+    if (htmlElement) {
+      if (newDarkMode) {
+        htmlElement.classList.add('dark');
+        // Force a style reload by adding and removing a class
+        htmlElement.classList.add('dark-mode-enabled');
+        setTimeout(() => htmlElement.classList.remove('dark-mode-enabled'), 10);
+      } else {
+        htmlElement.classList.remove('dark');
+      }
+    }
     
-    // Also save to localStorage
+    // Also manipulate documentElement as a fallback
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    // Force style recalculation
+    document.body.style.display = 'none';
+    document.body.offsetHeight; // Trigger a reflow
+    document.body.style.display = '';
+    
+    // Save to localStorage
     localStorage.setItem("darkMode", JSON.stringify(newDarkMode));
     
     console.log("Dark mode toggled to:", newDarkMode);
+    console.log("HTML classes:", htmlElement ? htmlElement.classList.value : "No HTML element found");
   };
 
   // Helper functions
@@ -329,13 +504,25 @@ export default function App() {
       <div className="max-w-4xl mx-auto p-4 bg-white dark:bg-gray-800 shadow rounded transition-colors duration-200">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold dark:text-white">Task Tracker</h1>
-          <button 
-            onClick={toggleDarkMode}
-            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
-            aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {darkMode ? <SunIcon /> : <MoonIcon />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsTagEditorOpen(true)}
+              className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
+              aria-label="Manage Tags"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                <line x1="7" y1="7" x2="7.01" y2="7"></line>
+              </svg>
+            </button>
+            <button 
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {darkMode ? <SunIcon /> : <MoonIcon />}
+            </button>
+          </div>
         </div>
       
         {/* Task Creation Form */}
@@ -396,7 +583,7 @@ export default function App() {
                     {task.tags.map((tag, i) => (
                       <span 
                         key={i}
-                        className={`text-xs px-2 py-0.5 rounded ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
+                        className={`text-xs px-2 py-0.5 rounded ${customTags[tag] || "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
                       >
                         {tag}
                       </span>
@@ -602,7 +789,7 @@ export default function App() {
                   {editingTask.tags.map((tag, index) => (
                     <div 
                       key={index} 
-                      className={`text-xs px-2 py-1 rounded flex items-center ${TAG_COLORS[tag] || "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
+                      className={`text-xs px-2 py-1 rounded flex items-center ${customTags[tag] || "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"}`}
                     >
                       {tag}
                       <button 
