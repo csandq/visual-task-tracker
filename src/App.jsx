@@ -453,25 +453,25 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center space-x-6 overflow-x-auto py-2">
-                  {task.steps.map((step, index) => (
-                    <React.Fragment key={index}>
-                      <Step 
-                        {...step} 
-                        onClick={() => openStepModal(task.id, index)} 
-                      />
-                      {index < task.steps.length - 1 && (
-                        <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 flex-shrink-0"></div>
-                      )}
-                    </React.Fragment>
-                  ))}
-                  <button 
-                    onClick={() => openStepModal(task.id, -1)} 
-                    className="ml-2 w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
-                  >
-                    +
-                  </button>
-                </div>
+                <div className="flex flex-wrap items-center gap-4 py-2">
+  {task.steps.map((step, index) => (
+    <div key={index} className="flex items-center">
+      <Step 
+        {...step} 
+        onClick={() => openStepModal(task.id, index)} 
+      />
+      {index < task.steps.length - 1 && (
+        <div className="w-6 h-1 bg-gray-300 dark:bg-gray-600 mx-2 hidden sm:block"></div>
+      )}
+    </div>
+  ))}
+  <button 
+    onClick={() => openStepModal(task.id, -1)} 
+    className="ml-2 w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+  >
+    +
+  </button>
+</div>
                 <div className="flex justify-end mt-2">
                   <button 
                     onClick={() => deleteTask(task.id)} 
