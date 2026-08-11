@@ -176,6 +176,12 @@ function formatRelativeDate(value: string) {
   return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "No deadline";
 }
 
+function greetingForHour(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 function normalizeLink(rawValue: string) {
   const value = rawValue.trim();
   if (!value) return null;
@@ -220,9 +226,11 @@ export default function Home() {
   const [aiSummary, setAiSummary] = useState("");
   const [aiRefresh, setAiRefresh] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
   const [formError, setFormError] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const saveAttemptRef = useRef(0);
 
   useEffect(() => {
@@ -346,6 +354,15 @@ export default function Home() {
   }, [showNew]);
 
   useEffect(() => {
+    if (!notificationsOpen) return;
+    function closeNotifications(event: MouseEvent) {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) setNotificationsOpen(false);
+    }
+    document.addEventListener("mousedown", closeNotifications);
+    return () => document.removeEventListener("mousedown", closeNotifications);
+  }, [notificationsOpen]);
+
+  useEffect(() => {
     if (!ready || !serverReady) return;
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
@@ -395,6 +412,7 @@ export default function Home() {
     return aDate - bDate || a.task.title.localeCompare(b.task.title);
   }), [openSteps]);
   const blockedSteps = openSteps.filter(({ step }) => step.status === "blocked");
+  const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
   const blockedCount = tasks.filter((task) => task.steps.some((step) => step.status === "blocked")).length;
   const allSteps = tasks.flatMap((task) => task.steps);
@@ -413,6 +431,7 @@ export default function Home() {
   }, [calendarMonth]);
   const calendarLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const headerDateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
+  const greeting = greetingForHour(new Date().getHours());
 
   function updateTask(taskId: number, patch: Partial<Task>) {
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, ...patch } : task));
@@ -601,8 +620,8 @@ export default function Home() {
 
       <section className="workspace">
         <header className="topbar">
-          <div><p className="eyebrow">{headerDateLabel}</p><h1>Good afternoon, Christian.</h1></div>
-          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap"><button className="icon-btn" aria-label={`${blockedCount} blocked notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{blockedCount > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><strong>Attention queue</strong>{blockedSteps.length > 0 ? blockedSteps.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No blocked steps right now.</p>}</div>}</div><button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></div>
+          <div className="topbar-intro">{currentView === "journeys" && <><p className="eyebrow date-label">{headerDateLabel}</p><h1>{greeting}, Christian.</h1><p className="topbar-sub">Three journeys need your attention today.</p></>}</div>
+          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}</div>}</div><button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
@@ -621,12 +640,11 @@ export default function Home() {
             <div className="new-tag-row"><input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="New tag name"/><label className="color-picker"><input type="color" value={newTagColor} onChange={(e) => setNewTagColor(e.target.value)}/><span>{newTagColor.toUpperCase()}</span></label><button onClick={() => { const name = newTagName.trim(); if (name && !Object.prototype.hasOwnProperty.call(tagLibrary, name)) { setTagLibrary((current) => ({ ...current, [name]: newTagColor })); setNewTagName(""); } }}>＋ Add tag</button></div>
           </div>
           <div className="settings-note"><span>i</span><p><strong>One shared vocabulary</strong>Tags created while editing a task are saved here automatically and suggested everywhere else.</p></div></> : settingsTab === "workspaces" ? <><div className="settings-card workspace-settings-card">
-            <div className="workspace-table-head"><span>Workspace / project</span><span>Color</span><span>Tasks</span><span>Status</span></div>
+            <div className="workspace-table-head"><span>Workspace / project</span><span>Tasks</span><span>Status</span></div>
             {Object.entries(workspaces).map(([name, info]) => <div className="workspace-setting-row" key={name}>
-              <div className="workspace-name-edit"><i style={{ background: info.color }}/><div><input defaultValue={name} aria-label={`Rename ${name}`} onBlur={(e) => renameWorkspace(name, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}/><textarea value={info.description} aria-label={`${name} description`} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], description: e.target.value } }))}/></div></div>
-              <label className="color-picker"><input type="color" value={info.color} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], color: e.target.value } }))}/><span>{info.color.toUpperCase()}</span></label>
+              <div className="workspace-name-edit"><div className="workspace-edit-line"><i style={{ background: info.color }}/><input defaultValue={name} aria-label={`Rename ${name}`} onBlur={(e) => renameWorkspace(name, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}/><label className="color-picker" title="Change workspace colour"><input type="color" value={info.color} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], color: e.target.value } }))}/><span>{info.color.toUpperCase()}</span></label></div><textarea value={info.description} aria-label={`${name} description`} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], description: e.target.value } }))}/></div>
               <span className="usage-count">{tasks.filter((task) => task.project === name).length} tasks</span>
-              <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Open" : "Closed"}</button>
+              <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Live" : "Closed"}</button>
             </div>)}
             <div className="new-workspace-row"><input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} placeholder="New workspace name"/><label className="color-picker"><input type="color" value={newWorkspaceColor} onChange={(e) => setNewWorkspaceColor(e.target.value)}/><span>{newWorkspaceColor.toUpperCase()}</span></label><button onClick={() => { const name = newWorkspaceName.trim(); if (name && !Object.prototype.hasOwnProperty.call(workspaces, name)) { setWorkspaces((current) => ({ ...current, [name]: { description: "A collection of related tasks and journeys.", color: newWorkspaceColor, active: true } })); setNewWorkspaceName(""); } }}>＋ New workspace</button></div>
           </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : <><div className="settings-card data-settings-card">
