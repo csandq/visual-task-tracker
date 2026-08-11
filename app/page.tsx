@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Status = "done" | "in-progress" | "blocked" | "todo";
 type Priority = "High" | "Medium" | "Low";
+type View = "journeys" | "my-tasks" | "calendar" | "settings";
 type ActivityEntry = { id: number; message: string; timestamp: string; status?: Status };
 type Attachment = { id: string; name: string; size: number; type: string };
 type Step = { id: number; label: string; status: Status; note: string; deadline: string; people?: string; owner?: string; attachment?: Attachment; activity?: ActivityEntry[] };
@@ -190,6 +191,13 @@ function greetingForHour(hour: number) {
   return "Good evening";
 }
 
+function viewForPath(pathname: string): View {
+  if (pathname.endsWith("/my-tasks")) return "my-tasks";
+  if (pathname.endsWith("/calendar")) return "calendar";
+  if (pathname.endsWith("/settings")) return "settings";
+  return "journeys";
+}
+
 function normalizeLink(rawValue: string) {
   const value = rawValue.trim();
   if (!value) return null;
@@ -220,7 +228,7 @@ export default function Home() {
   const [tagDraft, setTagDraft] = useState("");
   const [linkDraft, setLinkDraft] = useState("");
   const [dependencyPickerOpen, setDependencyPickerOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<"journeys" | "my-tasks" | "calendar" | "settings">("journeys");
+  const [currentView, setCurrentView] = useState<View>("journeys");
   const [tagLibrary, setTagLibrary] = useState<Record<string, string>>(defaultTagColors);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#668d74");
@@ -300,6 +308,13 @@ export default function Home() {
     }
     loadData();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    function syncView() { setCurrentView(viewForPath(window.location.pathname)); }
+    syncView();
+    window.addEventListener("popstate", syncView);
+    return () => window.removeEventListener("popstate", syncView);
   }, []);
 
   useEffect(() => {
@@ -475,6 +490,13 @@ export default function Home() {
   const calendarLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const headerDateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
   const greeting = greetingForHour(new Date().getHours());
+
+  function navigateTo(view: View) {
+    setCurrentView(view);
+    const base = window.location.pathname.startsWith("/kairos") ? "/kairos" : "";
+    const suffix = view === "journeys" ? "" : `/${view}`;
+    window.history.pushState({}, "", `${base}${suffix || "/"}`);
+  }
 
   function recordActivity(action: ActivityLogEntry["action"], entity: ActivityLogEntry["entity"], message: string) {
     setActivityLog((current) => [...current, { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), timestamp: new Date().toISOString(), action, entity, message }].slice(-200));
@@ -723,14 +745,14 @@ export default function Home() {
         <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span><small>Track what matters</small></div></div>
         <button className="collapse-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? "›" : "‹"}</button>
         <nav aria-label="Primary navigation">
-          <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Journeys" onClick={() => setCurrentView("journeys")}><span>⌁</span><span className="nav-text">Journeys</span></button>
-          <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My tasks" onClick={() => { setCurrentView("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My tasks</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
-          <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { setCurrentView("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
-          <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { setCurrentView("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
+          <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Journeys" onClick={() => navigateTo("journeys")}><span>⌁</span><span className="nav-text">Journeys</span></button>
+          <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My tasks" onClick={() => { navigateTo("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My tasks</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
+          <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { navigateTo("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
+          <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { navigateTo("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
         </nav>
         <div className="nav-label">Workspace</div>
-        <button className={`nav-item workspace-nav ${activeWorkspace === null ? "active" : ""}`} title="All workspaces" onClick={() => { setActiveWorkspace(null); setCurrentView("journeys"); }}><span className="all-workspaces-mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.3" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="1.7" fill="currentColor"/></svg></span><span className="nav-text">All workspaces</span><b>{tasks.length}</b></button>
-        {Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <button key={name} className={`nav-item workspace-nav ${activeWorkspace === name ? "active" : ""}`} title={name} onClick={() => { setActiveWorkspace(name); setCurrentView("journeys"); }}><span className="project-dot" style={{ background: info.color }} /><span className="nav-text">{name}</span><b>{tasks.filter((task) => task.project === name).length}</b></button>)}
+        <button className={`nav-item workspace-nav ${activeWorkspace === null ? "active" : ""}`} title="All workspaces" onClick={() => { setActiveWorkspace(null); navigateTo("journeys"); }}><span className="all-workspaces-mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.3" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="1.7" fill="currentColor"/></svg></span><span className="nav-text">All workspaces</span><b>{tasks.length}</b></button>
+        {Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <button key={name} className={`nav-item workspace-nav ${activeWorkspace === name ? "active" : ""}`} title={name} onClick={() => { setActiveWorkspace(name); navigateTo("journeys"); }}><span className="project-dot" style={{ background: info.color }} /><span className="nav-text">{name}</span><b>{tasks.filter((task) => task.project === name).length}</b></button>)}
         <div className="sidebar-footer">
           <div className="avatar">CH</div><div className="profile-copy"><strong>Christian</strong><span>Personal workspace</span></div>
         </div>
