@@ -198,6 +198,7 @@ export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
   const [selected, setSelected] = useState<{ taskId: number; stepId: number } | null>(null);
   const [filter, setFilter] = useState("All work");
+  const [sortBy, setSortBy] = useState<"manual" | "urgency" | "deadline">("manual");
   const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -393,12 +394,22 @@ export default function Home() {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [tasks, tagLibrary, workspaces, ready, serverReady, aiRefresh]);
 
-  const visibleTasks = useMemo(() => tasks.filter((task) => {
+  const visibleTasks = useMemo(() => {
+    const filtered = tasks.filter((task) => {
     const searchable = [task.title, task.project, task.tags.join(" "), ...task.steps.flatMap((step) => [step.label, step.note, step.people ?? "", step.owner ?? "", step.deadline])].join(" ");
     const matchesQuery = searchable.toLowerCase().includes(query.trim().toLowerCase());
     const matchesFilter = filter === "All work" || (filter === "In progress" && task.steps.some((s) => s.status === "in-progress")) || (filter === "Blocked" && task.steps.some((s) => s.status === "blocked")) || task.priority === filter;
     return matchesQuery && matchesFilter && (!activeWorkspace || task.project === activeWorkspace);
-  }), [tasks, filter, query, activeWorkspace]);
+    });
+    if (sortBy === "manual") return filtered;
+    const urgencyRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
+    return [...filtered].sort((a, b) => {
+      if (sortBy === "urgency") return urgencyRank[a.priority] - urgencyRank[b.priority] || a.title.localeCompare(b.title);
+      const aDeadline = Math.min(...a.steps.map((step) => parseDateKey(normalizeDeadline(step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER));
+      const bDeadline = Math.min(...b.steps.map((step) => parseDateKey(normalizeDeadline(step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER));
+      return aDeadline - bDeadline || a.title.localeCompare(b.title);
+    });
+  }, [tasks, filter, query, activeWorkspace, sortBy]);
 
   const selectedTask = selected ? tasks.find((task) => task.id === selected.taskId) : undefined;
   const selectedStep = selectedTask?.steps.find((step) => step.id === selected?.stepId);
@@ -678,9 +689,9 @@ export default function Home() {
 
         <div className="content-head">
           <div><h2>{activeWorkspace ? "Tasks in this workspace" : "Task journeys"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
-          <div className="filters">
+          <div className="content-controls"><label className="sort-control"><span>Sort by</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} aria-label="Sort journeys"><option value="manual">Default order</option><option value="urgency">Urgency</option><option value="deadline">Deadline date</option></select></label><div className="filters">
             {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
-          </div>
+          </div></div>
         </div>
 
         <div className="task-list">
@@ -738,7 +749,7 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className="panel-footer"><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button onClick={() => setEditTaskId(null)}>Done</button></div>
+          <div className="panel-footer"><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="major-button" onClick={() => setEditTaskId(null)}>Done</button></div>
         </aside>
       )}
 
@@ -759,11 +770,11 @@ export default function Home() {
             <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) updateStep({ attachment: file.name }); e.currentTarget.value = ""; }} /></label></div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
-          <div className="panel-footer step-footer"><button className="journey-link" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button onClick={() => setSelected(null)}>Done</button></div>
+          <div className="panel-footer step-footer"><button className="journey-link" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="major-button" onClick={() => setSelected(null)}>Done</button></div>
         </aside>
       )}
 
-      {showNew && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-heading"><button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close modal">×</button><span className="eyebrow">START A JOURNEY</span><h2 id="new-task-heading">What are you moving forward?</h2><p>Create the task now. You can shape its steps as you go.</p><label htmlFor="new-task-title">Task name<input ref={newTitleRef} id="new-task-title" value={newTitle} onChange={(e) => { setNewTitle(e.target.value); setFormError(""); }} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="e.g. Plan customer workshop" /></label><label htmlFor="new-task-workspace">Workspace<select id="new-task-workspace" value={newWorkspace} onChange={(e) => setNewWorkspace(e.target.value)}>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="modal-actions"><button onClick={() => setShowNew(false)}>Cancel</button><button className="new-btn" onClick={addTask}>Create journey</button></div></div></div>}
+      {showNew && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-heading"><button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close modal">×</button><span className="eyebrow">START A JOURNEY</span><h2 id="new-task-heading">What are you moving forward?</h2><p>Create the task now. You can shape its steps as you go.</p><label htmlFor="new-task-title">Task name<input ref={newTitleRef} id="new-task-title" value={newTitle} onChange={(e) => { setNewTitle(e.target.value); setFormError(""); }} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="e.g. Plan customer workshop" /></label><label htmlFor="new-task-workspace">Workspace<select id="new-task-workspace" value={newWorkspace} onChange={(e) => setNewWorkspace(e.target.value)}>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="modal-actions"><button className="major-button" onClick={() => setShowNew(false)}>Cancel</button><button className="major-button" onClick={addTask}>Create journey</button></div></div></div>}
     </main>
   );
 }
