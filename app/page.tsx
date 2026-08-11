@@ -264,6 +264,7 @@ export default function Home() {
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiQuestionState, setAiQuestionState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [formError, setFormError] = useState("");
+  const [clock, setClock] = useState(() => new Date());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -398,6 +399,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     function dismissWithEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setNotificationsOpen(false);
@@ -495,6 +501,11 @@ export default function Home() {
   const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
   const blockedCount = tasks.filter((task) => task.steps.some((step) => step.status === "blocked")).length;
+  const closestStep = useMemo(() => openSteps
+    .map(({ task, step }) => ({ task, step, date: parseDateKey(normalizeDeadline(step.deadline)) }))
+    .filter((item): item is { task: Task; step: Step; date: Date } => item.date !== null)
+    .sort((a, b) => a.date.getTime() - b.date.getTime())[0], [openSteps]);
+  const closestDeadlineDays = closestStep ? Math.max(0, Math.ceil((closestStep.date.getTime() - new Date(clock.getFullYear(), clock.getMonth(), clock.getDate()).getTime()) / 86_400_000)) : null;
   const allSteps = tasks.flatMap((task) => task.steps);
   const weeklyProgress = allSteps.length === 0 ? 0 : Math.round((allSteps.filter((step) => step.status === "done").length / allSteps.length) * 100);
   const focusRecommendation = blockedSteps.length > 0
@@ -510,7 +521,8 @@ export default function Home() {
     return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
   }, [calendarMonth]);
   const calendarLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const headerDateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
+  const headerDateLabel = clock.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }).toUpperCase();
+  const headerTimeLabel = clock.toLocaleTimeString(undefined, { hour12: false });
   const greeting = greetingForHour(new Date().getHours());
 
   function navigateTo(view: View) {
@@ -674,6 +686,21 @@ export default function Home() {
     if (task) recordActivity("added", "step", `Added a new step to “${task.title}”.`);
   }
 
+  function viewTaskInJourneys(task: Task) {
+    setActiveWorkspace(null);
+    setCollapsedTasks((current) => current.filter((id) => id !== task.id));
+    setEditTaskId(null);
+    setSelected(null);
+    navigateTo("journeys");
+  }
+
+  function viewStepInMySteps(task: Task, step: Step) {
+    setActiveWorkspace(null);
+    setEditTaskId(null);
+    setSelected({ taskId: task.id, stepId: step.id });
+    navigateTo("my-tasks");
+  }
+
   function pauseTask(task: Task) {
     if (task.project === ON_HOLD_WORKSPACE) return;
     updateTask(task.id, { project: ON_HOLD_WORKSPACE, pausedFrom: task.project });
@@ -811,7 +838,7 @@ export default function Home() {
 
       <section className="workspace">
         <header className="topbar">
-          <div className="topbar-intro">{currentView === "journeys" && <><p className="eyebrow date-label">{headerDateLabel}</p><h1>{greeting}, Christian.</h1><p className="topbar-sub">Three journeys need your attention today.</p></>}</div>
+          <div className="topbar-intro">{currentView === "journeys" && <><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p><h1>{greeting}, Christian.</h1><p className="topbar-sub">Three journeys need your attention today.</p></>}</div>
           <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
@@ -859,8 +886,7 @@ export default function Home() {
         </section> : <>
         <section className="overview">
           <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong>{aiState === "ready" ? <div className="ai-memo">{memoLines(aiSummary).map((line, index) => { const formatted = memoParts(line); return <p className={formatted.heading ? "memo-heading" : ""} key={`${line}-${index}`}>{formatted.bullet && <span className="memo-bullet">•</span>}{formatted.parts.map((part, partIndex) => part.startsWith("**") && part.endsWith("**") ? <strong key={partIndex}>{part.slice(2, -2)}</strong> : part)}</p>; })}</div> : <p>{focusRecommendation}</p>}<form className="ai-ask" onSubmit={(event) => { event.preventDefault(); askAi(); }}><input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about your journeys…" aria-label="Ask Kairos AI"/><button className="save-btn" type="submit" disabled={aiQuestionState === "loading"}>{aiQuestionState === "loading" ? "Thinking…" : "Ask"}</button></form>{aiAnswer && <div className={`ai-answer ${aiQuestionState}`} aria-live="polite">{memoLines(aiAnswer).map((line, index) => { const formatted = memoParts(line); return <p className={formatted.heading ? "memo-heading" : ""} key={`${line}-${index}`}>{formatted.bullet && <span className="memo-bullet">•</span>}{formatted.parts.map((part, partIndex) => part.startsWith("**") && part.endsWith("**") ? <strong key={partIndex}>{part.slice(2, -2)}</strong> : part)}</p>; })}</div>}{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh</button>}</div>
-          <div className="overview-stat"><span>IN MOTION</span><strong>{inMotionCount}</strong></div>
-          <div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong></div>
+          <div className="overview-metrics"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> in {closestDeadlineDays} {closestDeadlineDays === 1 ? "day" : "days"}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div>
           <div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div>
         </section>
 
@@ -929,7 +955,7 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className="panel-footer">{taskToEdit.backlog ? <span>Not in Journeys yet</span> : null}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause task</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
+          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{taskToEdit.backlog ? <span>Not in Journeys yet</span> : <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View task</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause task</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
         </aside>
       )}
 
