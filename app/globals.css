@@ -680,6 +680,10 @@ body, button, input, textarea, select,
 .ai-answer { padding:8px 0 0 10px; border-left:2px solid var(--mock-pos); }
 .ai-answer.error { border-color:var(--mock-neg); }
 .ai-answer.error p { color:var(--mock-neg)!important; }
+.ai-refresh { width:max-content; padding:3px 6px!important; font-size:9px!important; }
+.ai-memo p, .ai-answer p { white-space:pre-wrap; }
+.memo-heading { color:var(--mock-text); font-weight:600; }
+.memo-bullet { display:inline-block; margin-right:6px; color:var(--mock-muted); }
 .notification-help { display:block; margin-top:9px; color:var(--mock-faint); font-family:var(--mock-sans); font-size:9px; line-height:1.4; }
 .uploads-card { overflow:hidden; }
 .upload-row { display:flex; align-items:center; justify-content:space-between; gap:14px; padding:13px 18px; border-bottom:1px solid var(--mock-rule); }
@@ -695,6 +699,8 @@ body, button, input, textarea, select,
 .backlog-hero h2 { margin:7px 0 6px; color:var(--mock-text); font-family:var(--mock-sans); font-size:24px; font-weight:600; }
 .backlog-hero>p:not(.eyebrow) { max-width:48ch; margin:0; color:var(--mock-muted); font-family:var(--mock-sans); font-size:12px; }
 .backlog-hero form { display:flex; width:min(520px,100%); gap:8px; margin-top:22px; }
+.backlog-new-btn { width:auto; flex:0 0 auto; padding:1.4px!important; border-radius:999px!important; }
+.backlog-new-btn .new-btn-inner { padding:0 12px; }
 .backlog-hero input { min-width:0; flex:1; height:34px; padding:0 12px; border:1px solid var(--mock-rule-2); border-radius:9px; color:var(--mock-text); background:var(--mock-chip); outline:0; font-family:var(--mock-sans); font-size:12px; }
 .backlog-lists { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin-top:18px; }
 .backlog-list { min-width:0; overflow:hidden; border:1px solid var(--mock-rule); border-radius:14px; background:var(--mock-panel); }
@@ -719,7 +725,7 @@ body, button, input, textarea, select,
   .step-footer { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.75fr); }
   .backlog-lists { grid-template-columns:1fr; }
   .backlog-hero form { flex-direction:column; }
-  .backlog-hero form .save-btn { width:100%; }
+  .backlog-hero form .backlog-new-btn { width:100%; }
 }
 
 .step-footer { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,.75fr); }
