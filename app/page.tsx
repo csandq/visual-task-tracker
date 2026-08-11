@@ -313,6 +313,11 @@ export default function Home() {
 
   useEffect(() => {
     function focusSearch(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        setSidebarCollapsed((value) => !value);
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         searchInputRef.current?.focus();
@@ -578,17 +583,17 @@ export default function Home() {
   return (
     <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand"><div><span className="brand-name">Kairos</span><small>Track what matters</small></div></div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span><small>Track what matters</small></div></div>
         <button className="collapse-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? "›" : "‹"}</button>
         <nav aria-label="Primary navigation">
           <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Journeys" onClick={() => setCurrentView("journeys")}><span>⌁</span><span className="nav-text">Journeys</span></button>
           <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My tasks" onClick={() => { setCurrentView("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My tasks</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
           <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { setCurrentView("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
+          <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { setCurrentView("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
         </nav>
         <div className="nav-label">Workspace</div>
-        <button className={`nav-item workspace-nav ${activeWorkspace === null ? "active" : ""}`} title="All workspaces" onClick={() => { setActiveWorkspace(null); setCurrentView("journeys"); }}><span>◎</span><span className="nav-text">All workspaces</span><b>{tasks.length}</b></button>
+        <button className={`nav-item workspace-nav ${activeWorkspace === null ? "active" : ""}`} title="All workspaces" onClick={() => { setActiveWorkspace(null); setCurrentView("journeys"); }}><span className="all-workspaces-mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.3" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="1.7" fill="currentColor"/></svg></span><span className="nav-text">All workspaces</span><b>{tasks.length}</b></button>
         {Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <button key={name} className={`nav-item workspace-nav ${activeWorkspace === name ? "active" : ""}`} title={name} onClick={() => { setActiveWorkspace(name); setCurrentView("journeys"); }}><span className="project-dot" style={{ background: info.color }} /><span className="nav-text">{name}</span><b>{tasks.filter((task) => task.project === name).length}</b></button>)}
-        <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { setCurrentView("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
         <div className="sidebar-footer">
           <div className="avatar">CH</div><div className="profile-copy"><strong>Christian</strong><span>Personal workspace</span></div>
         </div>
@@ -597,7 +602,7 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div><p className="eyebrow">{headerDateLabel}</p><h1>Good afternoon, Christian.</h1></div>
-          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap"><button className="icon-btn" aria-label={`${blockedCount} blocked notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{blockedCount > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><strong>Attention queue</strong>{blockedSteps.length > 0 ? blockedSteps.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No blocked steps right now.</p>}</div>}</div><button className="new-btn" onClick={openNewTask}>＋ New task</button></div>
+          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap"><button className="icon-btn" aria-label={`${blockedCount} blocked notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{blockedCount > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><strong>Attention queue</strong>{blockedSteps.length > 0 ? blockedSteps.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No blocked steps right now.</p>}</div>}</div><button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
@@ -642,7 +647,7 @@ export default function Home() {
           <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong><p>{aiState === "ready" ? aiSummary : focusRecommendation}</p>{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh memo</button>}</div>
           <div className="overview-stat"><span>IN MOTION</span><strong>{inMotionCount}</strong></div>
           <div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong></div>
-          <div className="mini-progress"><span>WEEKLY PROGRESS</span><div><i style={{ width: `${weeklyProgress}%` }} /></div><small>{weeklyProgress}%</small></div>
+          <div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
@@ -659,9 +664,9 @@ export default function Home() {
             <article className={`task-card ${selectedTask?.id === task.id ? "selected" : ""}`} key={task.id} draggable onDragStart={() => setDragged(task.id)} onDragOver={(e) => { e.preventDefault(); reorder(task.id); }} onDragEnd={() => setDragged(null)}>
               <button className="drag" aria-label={`Drag ${task.title}`}>⠿</button>
               <button className="task-meta" onClick={() => { setEditTaskId(task.id); setSelected(null); }} aria-label={`Edit ${task.title}`}>
-                <div className="task-title-row"><h3>{task.title}</h3></div>
-                <div className="task-subline"><span className="workspace-label" style={{ color: workspaces[task.project]?.color }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span>{(task.dependencies?.length ?? 0) > 0 && <span className="dependency-badge">↳ {task.dependencies?.length} dependenc{task.dependencies?.length === 1 ? "y" : "ies"}</span>}{(task.links?.length ?? 0) > 0 && <span>↗ {task.links?.length} link{task.links?.length === 1 ? "" : "s"}</span>}</div>
-                <div className="tags"><span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span>{task.tags.map((tag) => <span key={tag} style={{ color: tagLibrary[tag] ?? "#66736b", background: `${tagLibrary[tag] ?? "#718096"}1c` }}>{tag}</span>)}</div>
+                <div className="task-title-row"><h3>{task.title}</h3><div className="task-head-meta">{(task.dependencies?.length ?? 0) > 0 && <span title={`${task.dependencies?.length} dependencies`}>↳ {task.dependencies?.length}</span>}{(task.links?.length ?? 0) > 0 && <span title={`${task.links?.length} reference links`}>↗ {task.links?.length}</span>}<span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
+                <div className="task-subline"><span className="workspace-label" style={{ color: workspaces[task.project]?.color }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span></div>
+                <div className="tags">{task.tags.map((tag) => <span key={tag} style={{ color: tagLibrary[tag] ?? "#66736b", background: `${tagLibrary[tag] ?? "#718096"}1c` }}>{tag}</span>)}<span className="task-progress">{progress(task)}%</span></div>
               </button>
               <div className="journey" style={{ gridTemplateColumns: `repeat(${task.steps.length + 1}, minmax(42px, 1fr))` }}>
                 <div className="journey-line" style={{ left: `calc(50% / ${task.steps.length + 1})`, right: `calc(50% / ${task.steps.length + 1})` }}><i style={{ width: `${progress(task)}%` }} /></div>
