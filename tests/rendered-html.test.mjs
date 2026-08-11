@@ -21,9 +21,8 @@ test("server-renders the Kairos application", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Kairos — Visual Task Journeys<\/title>/i);
-  assert.match(html, /Track what matters/);
-  assert.match(html, /Task journeys/);
-  assert.match(html, /Christian/);
+  assert.match(html, /Loading Kairos…/);
+  assert.doesNotMatch(html, /Launch the autumn campaign/);
   assert.doesNotMatch(html, /codex-preview/);
 });
 
