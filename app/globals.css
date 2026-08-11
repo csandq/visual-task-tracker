@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap");
 
 :root {
   --navy:#02324F;
@@ -14,8 +15,8 @@
 }
 * { box-sizing:border-box; }
 html, body { margin:0; min-height:100%; background:var(--paper); color:var(--ink); }
-body { font-family:Arial, Helvetica, sans-serif; }
-button, input, textarea { font:inherit; }
+body { font-family:var(--mock-sans); }
+button, input, textarea, select { font:inherit; }
 button { color:inherit; }
 
 .app-shell { min-height:100vh; display:grid; grid-template-columns:228px minmax(760px,1fr); transition:grid-template-columns .22s ease; }
@@ -24,7 +25,7 @@ button { color:inherit; }
 .brand-name { display:block;font:500 24px Georgia,serif;line-height:1; }
 .brand small { display:block;color:rgba(248,246,242,.72);font:italic 14px/1.1 "Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;margin-top:6px;letter-spacing:.01em;white-space:nowrap; }
 .brand-name,.nav-text,.profile-copy,.profile-menu,.nav-item b { transition:opacity .12s ease; }
-.collapse-toggle { position:absolute;right:-12px;top:72px;width:24px;height:24px;border:1px solid rgba(248,246,242,.48);border-radius:50%;background:rgba(46,46,58,.36);color:var(--white);display:grid;place-items:center;padding:0;font-size:18px;line-height:1;cursor:pointer;box-shadow:0 3px 9px rgba(46,46,58,.4);z-index:2; }
+.collapse-toggle { position:absolute;right:-12px;top:74px;width:24px;height:24px;border:1px solid rgba(248,246,242,.48);border-radius:50%;background:rgba(46,46,58,.36);color:var(--white);display:grid;place-items:center;padding:0;font-size:18px;line-height:1;cursor:pointer;box-shadow:0 3px 9px rgba(46,46,58,.4);z-index:2; }
 .collapse-toggle:hover { background:var(--white);color:var(--navy); }
 nav { display:grid;gap:4px; }
 .nav-item { width:100%;border:1px solid transparent;background:transparent;color:rgba(248,246,242,.82);display:flex;align-items:center;gap:11px;text-align:left;padding:10px 11px;border-radius:8px;font-size:13px;cursor:pointer; }
@@ -497,7 +498,7 @@ select, input[type="color"], input[type="date"] { cursor:pointer; }
 .sidebar-collapsed .brand::before, .sidebar-collapsed .brand::after { display:none; }
 .sidebar-collapsed .sidebar nav { margin-top:0; }
 .sidebar-collapsed .nav-label { padding-top:18px; }
-.sidebar-collapsed .collapse-toggle { top:20px; }
+.sidebar-collapsed .collapse-toggle { top:74px; }
 .sidebar-collapsed .nav-item { margin-bottom:2px; }
 .task-card[draggable="true"] { cursor:grab; }
 .task-card[draggable="true"]:active { cursor:grabbing; }
@@ -513,7 +514,7 @@ select, input[type="color"], input[type="date"] { cursor:pointer; }
 /* Settings and typography pass */
 .topbar-intro { min-width:0; }
 .date-label { font-family:var(--mock-mono)!important; font-size:9.5px!important; font-weight:400!important; letter-spacing:.08em!important; }
-.topbar-sub { margin-top:3px; color:var(--mock-muted); font-size:13.5px; }
+.topbar-sub { margin-top:3px; color:var(--mock-muted); font-family:var(--mock-sans)!important; font-size:13.5px; font-weight:400; }
 .notification-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:7px; }
 .notification-head > div { display:flex; align-items:center; gap:5px; }
 .notification-head button { border:0; background:transparent; color:var(--mock-muted); font-family:var(--mock-mono); font-size:10px; }
@@ -540,11 +541,48 @@ select, input[type="color"], input[type="date"] { cursor:pointer; }
 .settings-note strong { font-weight:500; }
 .settings-page .color-picker span, .settings-page .usage-count, .settings-page .delete-tag { font-size:10.5px; }
 
+/* Keep editorial copy and controls on the same sans-serif system; reserve the
+   mono face for compact dates, statuses, counts, and other metadata. */
+body, button, input, textarea, select,
+.topbar-sub, .overview .ai-focus strong, .overview .ai-focus p,
+.workspace-context, .content-head, .settings-page, .calendar-page, .my-tasks-page,
+.calendar-page button, .settings-page button, .settings-page input, .settings-page textarea,
+.settings-page select, .notification-popover, .modal, .detail-panel,
+.task-meta h3, .step strong, .action-list h3, .action-list p { font-family:var(--mock-sans)!important; }
+.date-label, .eyebrow, .task-subline, .tags, .priority, .task-progress,
+.step small, .task-head-meta, .mini-progress>span, .mini-progress small,
+.workspace-chip, .action-list time, .calendar-day>span, .calendar-weekdays span,
+.workspace-status, .usage-count { font-family:var(--mock-mono)!important; font-weight:400; }
+.topbar-sub, .overview .ai-focus p { line-height:1.5; }
+.calendar-weekdays span { font-size:10px; letter-spacing:.08em; }
+.calendar-day>span { font-size:10px; }
+.calendar-event strong, .calendar-event small, .calendar-legend span { font-family:var(--mock-sans)!important; }
+.calendar-event strong { font-size:10px; font-weight:500; }
+.calendar-event small { font-size:9px; }
+.calendar-legend span { font-size:10px; }
+.workspace-chip { font-size:10px; letter-spacing:.02em; }
+.action-list time { font-size:10px; }
+
+.new-btn { box-shadow:inset 0 1px 0 #ffffff22, 0 2px 9px #0007; }
+.new-btn-inner { background:#19191f; box-shadow:inset 0 1px 0 #ffffff18; font-family:var(--mock-sans)!important; }
+.new-btn::after { opacity:.62; }
+
+.task-card { position:relative; }
+.journey-collapse-toggle { position:absolute; top:16px; left:17px; z-index:3; width:20px; height:20px; border:0; border-radius:6px; background:transparent; color:var(--mock-faint); display:grid; place-items:center; font-size:17px; line-height:1; cursor:pointer; }
+.journey-collapse-toggle:hover, .journey-collapse-toggle:focus-visible { color:var(--mock-text); background:var(--mock-chip); outline:0; }
+.task-meta { padding-left:28px; }
+.task-card.is-collapsed .task-subline,
+.task-card.is-collapsed .tags,
+.task-card.is-collapsed .journey,
+.task-card.is-collapsed .completion { display:none; }
+.task-card.is-collapsed { padding-bottom:16px; }
+.task-card.is-collapsed .task-title-row { min-height:24px; }
+
 h1, h2, h3, h4, h5, h6,
-.brand small, .overview strong, .overview-stat strong, .content-head h2,
+.brand-name, .brand small, .overview strong, .overview-stat strong, .content-head h2,
 .workspace-context h2, .workspace-summary strong, .task-meta h3, .completion strong,
 .empty h3, .panel-head strong, .title-input, .task-name-input,
-.dependency-picker-menu strong, .selected-dependencies strong, .settings-head h2,
+.dependency-list strong, .dependency-picker-menu strong, .selected-dependencies strong, .settings-head h2,
 .tag-name-edit input, .workspace-name-edit input, .view-title h2,
 .action-list h3, .data-settings-card h3, .modal h2 { font-family:var(--mock-sans)!important; }
 .brand small { font-style:normal; }
