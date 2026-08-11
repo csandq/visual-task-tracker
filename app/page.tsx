@@ -196,13 +196,14 @@ function normalizeLink(rawValue: string) {
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>(seedTasks);
-  const [selected, setSelected] = useState<{ taskId: number; stepId: number } | null>({ taskId: 1, stepId: 13 });
+  const [selected, setSelected] = useState<{ taskId: number; stepId: number } | null>(null);
   const [filter, setFilter] = useState("All work");
   const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newWorkspace, setNewWorkspace] = useState("");
   const [dragged, setDragged] = useState<number | null>(null);
+  const [collapsedTasks, setCollapsedTasks] = useState<number[]>([]);
   const [ready, setReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
@@ -413,6 +414,7 @@ export default function Home() {
   }), [openSteps]);
   const blockedSteps = openSteps.filter(({ step }) => step.status === "blocked");
   const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
+  const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
   const blockedCount = tasks.filter((task) => task.steps.some((step) => step.status === "blocked")).length;
   const allSteps = tasks.flatMap((task) => task.steps);
@@ -435,6 +437,10 @@ export default function Home() {
 
   function updateTask(taskId: number, patch: Partial<Task>) {
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, ...patch } : task));
+  }
+
+  function toggleTaskCollapsed(taskId: number) {
+    setCollapsedTasks((current) => current.includes(taskId) ? current.filter((id) => id !== taskId) : [...current, taskId]);
   }
 
   function addTagToTask(task: Task, rawTag: string) {
@@ -673,14 +679,15 @@ export default function Home() {
         <div className="content-head">
           <div><h2>{activeWorkspace ? "Tasks in this workspace" : "Task journeys"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
           <div className="filters">
-            {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{tasks.length}</em>}</button>)}
+            {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
           </div>
         </div>
 
         <div className="task-list">
           {visibleTasks.map((task) => (
-            <article className={`task-card ${selectedTask?.id === task.id ? "selected" : ""}`} key={task.id} draggable onDragStart={() => setDragged(task.id)} onDragOver={(e) => { e.preventDefault(); reorder(task.id); }} onDragEnd={() => setDragged(null)}>
+            <article className={`task-card ${selectedTask?.id === task.id ? "selected" : ""} ${collapsedTasks.includes(task.id) ? "is-collapsed" : ""}`} key={task.id} draggable onDragStart={() => setDragged(task.id)} onDragOver={(e) => { e.preventDefault(); reorder(task.id); }} onDragEnd={() => setDragged(null)}>
               <button className="drag" aria-label={`Drag ${task.title}`}>⠿</button>
+              <button className="journey-collapse-toggle" aria-label={`${collapsedTasks.includes(task.id) ? "Expand" : "Collapse"} ${task.title}`} aria-expanded={!collapsedTasks.includes(task.id)} onClick={() => toggleTaskCollapsed(task.id)}>{collapsedTasks.includes(task.id) ? "›" : "⌄"}</button>
               <button className="task-meta" onClick={() => { setEditTaskId(task.id); setSelected(null); }} aria-label={`Edit ${task.title}`}>
                 <div className="task-title-row"><h3>{task.title}</h3><div className="task-head-meta">{(task.dependencies?.length ?? 0) > 0 && <span title={`${task.dependencies?.length} dependencies`}>↳ {task.dependencies?.length}</span>}{(task.links?.length ?? 0) > 0 && <span title={`${task.links?.length} reference links`}>↗ {task.links?.length}</span>}<span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
                 <div className="task-subline"><span className="workspace-label" style={{ color: workspaces[task.project]?.color }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span></div>
