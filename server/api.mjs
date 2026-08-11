@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
@@ -428,6 +428,31 @@ function readAttachment(request, response, id) {
   } catch { return json(response, 404, { error: "Attachment not found" }); }
 }
 
+function listAttachments(request, response) {
+  const attachments = readdirSync(attachmentDirectory)
+    .filter((name) => name.endsWith(".json"))
+    .map((name) => {
+      try {
+        const metadata = JSON.parse(readFileSync(join(attachmentDirectory, name), "utf8"));
+        const id = name.slice(0, -5);
+        const file = statSync(join(attachmentDirectory, `${id}.bin`));
+        return { ...metadata, size: file.size };
+      } catch { return null; }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return json(response, 200, { attachments });
+}
+
+function deleteAttachment(request, response, id) {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return json(response, 404, { error: "Attachment not found" });
+  try {
+    unlinkSync(join(attachmentDirectory, `${id}.json`));
+    unlinkSync(join(attachmentDirectory, `${id}.bin`));
+    return json(response, 200, { ok: true });
+  } catch { return json(response, 404, { error: "Attachment not found" }); }
+}
+
 async function handleRequest(request, response) {
   const url = new URL(request.url ?? "/", "http://localhost");
 
@@ -439,12 +464,15 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname === "/api/attachments") {
+    if (request.method === "GET") return listAttachments(request, response);
     if (request.method !== "POST") return json(response, 405, { error: "Method not allowed" });
     return createAttachment(request, response);
   }
   if (url.pathname.startsWith("/api/attachments/")) {
+    const id = url.pathname.slice("/api/attachments/".length);
+    if (request.method === "DELETE") return deleteAttachment(request, response, id);
     if (request.method !== "GET") return json(response, 405, { error: "Method not allowed" });
-    return readAttachment(request, response, url.pathname.slice("/api/attachments/".length));
+    return readAttachment(request, response, id);
   }
 
   if (url.pathname !== "/api/state") return json(response, 404, { error: "Not found" });
