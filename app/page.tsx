@@ -4,11 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Status = "done" | "in-progress" | "blocked" | "todo";
 type Priority = "High" | "Medium" | "Low";
-type View = "journeys" | "my-tasks" | "calendar" | "settings";
+type View = "journeys" | "my-tasks" | "calendar" | "backlog" | "settings";
 type ActivityEntry = { id: number; message: string; timestamp: string; status?: Status };
 type Attachment = { id: string; name: string; size: number; type: string };
 type Step = { id: number; label: string; status: Status; note: string; deadline: string; people?: string; owner?: string; attachment?: Attachment; activity?: ActivityEntry[] };
-type Task = { id: number; title: string; project: string; tags: string[]; priority: Priority; steps: Step[]; links?: string[]; dependencies?: number[]; pausedFrom?: string };
+type Task = { id: number; title: string; project: string; tags: string[]; priority: Priority; steps: Step[]; links?: string[]; dependencies?: number[]; pausedFrom?: string; backlog?: boolean };
 type ActivityLogEntry = { id: number; timestamp: string; action: "added" | "edited" | "removed" | "moved"; entity: "journey" | "step" | "tag" | "workspace" | "attachment"; message: string };
 type KairosData = {
   version: 1;
@@ -141,7 +141,7 @@ function normalizeData(data: KairosData): KairosData {
   for (const tag of new Set(tasks.flatMap((task) => task.tags))) {
     if (!tagLibrary[tag]) tagLibrary[tag] = "#718096";
   }
-  for (const project of new Set(tasks.map((task) => task.project))) {
+  for (const project of new Set(tasks.filter((task) => !task.backlog).map((task) => task.project))) {
     if (!workspaces[project]) workspaces[project] = { description: "A collection of related tasks and journeys.", color: "#91a09a", active: true };
   }
   if (!workspaces[ON_HOLD_WORKSPACE]) workspaces[ON_HOLD_WORKSPACE] = defaultWorkspaces[ON_HOLD_WORKSPACE];
@@ -194,8 +194,13 @@ function greetingForHour(hour: number) {
 function viewForPath(pathname: string): View {
   if (pathname.endsWith("/my-tasks")) return "my-tasks";
   if (pathname.endsWith("/calendar")) return "calendar";
+  if (pathname.endsWith("/backlog")) return "backlog";
   if (pathname.endsWith("/settings")) return "settings";
   return "journeys";
+}
+
+function memoLines(value: string) {
+  return value.replace(/\s+(?=(?:[-•*]\s|[A-Z][^.!?]{1,44}:))/g, "\n").replace(/([.!?])\s+(?=[A-Z0-9])/g, "$1\n").split(/\n+/).map((line) => line.trim()).filter(Boolean);
 }
 
 function normalizeLink(rawValue: string) {
@@ -218,6 +223,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [quickTitle, setQuickTitle] = useState("");
   const [newWorkspace, setNewWorkspace] = useState("");
   const [dragged, setDragged] = useState<number | null>(null);
   const [collapsedTasks, setCollapsedTasks] = useState<number[]>(() => seedTasks.map((task) => task.id));
@@ -607,6 +613,23 @@ export default function Home() {
     recordActivity("added", "journey", `Created journey “${newTitle.trim()}”.`);
   }
 
+  function addBacklogTask() {
+    const title = quickTitle.trim();
+    if (!title) return;
+    const id = nextAvailableId(tasks);
+    setTasks((current) => [{ id, title, project: "Backlog", tags: [], priority: "Medium", links: [], dependencies: [], steps: [], backlog: true }, ...current]);
+    setActivityLog((current) => [...current, { id: Date.now() * 1000, timestamp: new Date().toISOString(), action: "added", entity: "journey", message: `Added “${title}” to the backlog.` }].slice(-200));
+    setQuickTitle("");
+  }
+
+  function finishTaskEdit(task: Task) {
+    if (task.backlog && task.project !== "Backlog" && task.steps.length > 0) {
+      updateTask(task.id, { backlog: false });
+      recordActivity("moved", "journey", `Moved “${task.title}” from the backlog into journeys.`);
+    }
+    setEditTaskId(null);
+  }
+
   function deleteTask(taskId: number) {
     const task = tasks.find((item) => item.id === taskId);
     setTasks((current) => current.filter((task) => task.id !== taskId));
@@ -746,8 +769,9 @@ export default function Home() {
         <button className="collapse-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? "›" : "‹"}</button>
         <nav aria-label="Primary navigation">
           <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Journeys" onClick={() => navigateTo("journeys")}><span>⌁</span><span className="nav-text">Journeys</span></button>
-          <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My tasks" onClick={() => { navigateTo("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My tasks</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
+          <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My steps" onClick={() => { navigateTo("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My steps</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
           <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { navigateTo("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
+          <button className={`nav-item ${currentView === "backlog" ? "active" : ""}`} title="Backlog" onClick={() => { navigateTo("backlog"); setSelected(null); setEditTaskId(null); }}><span>≡</span><span className="nav-text">Backlog</span><b>{tasks.filter((task) => task.backlog).length}</b></button>
           <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { navigateTo("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
         </nav>
         <div className="nav-label">Workspace</div>
@@ -791,6 +815,11 @@ export default function Home() {
             <div><p className="eyebrow">STORAGE</p><h3>Your Kairos data</h3><p>{saveState === "saved" ? "Saved securely to this Kairos server." : saveState === "saving" ? "Saving your latest changes…" : saveState === "offline" ? "Offline: local data is shown until the server reconnects." : `Save failed: ${saveError || "the server did not accept the change."}`}</p></div>
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
+        </section> : currentView === "backlog" ? <section className="backlog-page">
+          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Move it forward later.</h2><p>Capture a task now. Add its workspace and steps when you have the shape of the work.</p><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="What needs doing?" aria-label="Quick task name"/><button className="save-btn" type="submit">Add new task</button></form></div>
+          <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open journeys</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>)}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open journeys.</p>}</section>
+            <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Journeys.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
+          </div>
         </section> : currentView === "calendar" ? <section className="calendar-page">
           <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active journey, organized by deadline.</p></div><div className="calendar-actions"><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
           <div className="calendar-weekdays">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day) => <span key={day}>{day}</span>)}</div>
@@ -802,7 +831,7 @@ export default function Home() {
           {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open tasks</h3><p>Every step is done. Add a new journey to keep moving.</p></div>}
         </section> : <>
         <section className="overview">
-          <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong><p>{aiState === "ready" ? aiSummary : focusRecommendation}</p><form className="ai-ask" onSubmit={(event) => { event.preventDefault(); askAi(); }}><input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about your journeys…" aria-label="Ask Kairos AI"/><button type="submit" disabled={aiQuestionState === "loading"}>{aiQuestionState === "loading" ? "Thinking…" : "Ask"}</button></form>{aiAnswer && <p className={`ai-answer ${aiQuestionState}`} aria-live="polite">{aiAnswer}</p>}{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh memo</button>}</div>
+          <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong>{aiState === "ready" ? <div className="ai-memo">{memoLines(aiSummary).map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div> : <p>{focusRecommendation}</p>}<form className="ai-ask" onSubmit={(event) => { event.preventDefault(); askAi(); }}><input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about your journeys…" aria-label="Ask Kairos AI"/><button className="save-btn" type="submit" disabled={aiQuestionState === "loading"}>{aiQuestionState === "loading" ? "Thinking…" : "Ask"}</button></form>{aiAnswer && <div className={`ai-answer ${aiQuestionState}`} aria-live="polite">{memoLines(aiAnswer).map((line, index) => <p key={`${line}-${index}`}>{line}</p>)}</div>}{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh memo</button>}</div>
           <div className="overview-stat"><span>IN MOTION</span><strong>{inMotionCount}</strong></div>
           <div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong></div>
           <div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div>
@@ -855,7 +884,8 @@ export default function Home() {
           <div className="panel-body">
             <label className="field-label" htmlFor="task-name">Task name</label>
             <textarea id="task-name" className="task-name-input" value={taskToEdit.title} onChange={(e) => updateTask(taskToEdit.id, { title: e.target.value })} />
-            <div className="two-cols"><div><label className="field-label" htmlFor="task-workspace">Workspace / project</label><select id="task-workspace" value={taskToEdit.project} onChange={(e) => updateTask(taskToEdit.id, { project: e.target.value })}>{Object.entries(workspaces).filter(([name, info]) => info.active || taskToEdit.project === name).map(([name]) => <option key={name}>{name}</option>)}</select></div><div><label className="field-label" htmlFor="task-priority">Priority</label><select id="task-priority" value={taskToEdit.priority} onChange={(e) => updateTask(taskToEdit.id, { priority: e.target.value as Priority })}><option>High</option><option>Medium</option><option>Low</option></select></div></div>
+            <div className="two-cols"><div><label className="field-label" htmlFor="task-workspace">Workspace / project</label><select id="task-workspace" value={taskToEdit.project} onChange={(e) => updateTask(taskToEdit.id, { project: e.target.value })}>{taskToEdit.backlog && <option value="Backlog">Backlog</option>}{Object.entries(workspaces).filter(([name, info]) => info.active || taskToEdit.project === name).map(([name]) => <option key={name}>{name}</option>)}</select></div><div><label className="field-label" htmlFor="task-priority">Priority</label><select id="task-priority" value={taskToEdit.priority} onChange={(e) => updateTask(taskToEdit.id, { priority: e.target.value as Priority })}><option>High</option><option>Medium</option><option>Low</option></select></div></div>
+            {taskToEdit.backlog && <div className="backlog-panel-callout"><strong>Quick task</strong><span>Add at least one step and choose a workspace, then Done will move it into Journeys.</span><button className="save-btn" onClick={() => addStep(taskToEdit.id)}>＋ Add step</button></div>}
             <p className="field-label">Tags</p>
             <div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div>
             <div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div>
@@ -872,7 +902,7 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className="panel-footer"><span>Changes save automatically</span>{taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause task</button>}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="save-btn" onClick={() => setEditTaskId(null)}>Done</button></div>
+          <div className="panel-footer">{taskToEdit.backlog ? <span>Not in Journeys yet</span> : null}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause task</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
         </aside>
       )}
 
@@ -893,7 +923,7 @@ export default function Home() {
             <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment.name}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) uploadAttachment(file); e.currentTarget.value = ""; }} /></label>{selectedStep.attachment && <a className="attachment-download" href={`/api/attachments/${encodeURIComponent(selectedStep.attachment.id)}`} target="_blank" rel="noreferrer">Open</a>}</div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
-          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><span>Changes save automatically</span><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => setSelected(null)}>Done</button></div>
+          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => setSelected(null)}>Done</button></div>
         </aside>
       )}
 
