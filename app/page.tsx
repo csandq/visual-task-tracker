@@ -239,7 +239,8 @@ export default function Home() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#668d74");
   const [workspaces, setWorkspaces] = useState(defaultWorkspaces);
-  const [settingsTab, setSettingsTab] = useState<"tags" | "workspaces" | "data" | "activity">("tags");
+  const [settingsTab, setSettingsTab] = useState<"tags" | "workspaces" | "data" | "activity" | "uploads">("tags");
+  const [uploads, setUploads] = useState<Attachment[]>([]);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newWorkspaceColor, setNewWorkspaceColor] = useState("#7b9b88");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error" | "offline">("offline");
@@ -414,6 +415,14 @@ export default function Home() {
     document.addEventListener("mousedown", closeNotifications);
     return () => document.removeEventListener("mousedown", closeNotifications);
   }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (currentView !== "settings" || settingsTab !== "uploads") return;
+    fetch("/api/attachments", { headers: { Accept: "application/json" } })
+      .then((response) => response.ok ? response.json() as Promise<{ attachments?: Attachment[] }> : Promise.reject(new Error("Unable to read uploads")))
+      .then((payload) => setUploads(Array.isArray(payload.attachments) ? payload.attachments : []))
+      .catch(() => setUploads([]));
+  }, [currentView, settingsTab]);
 
   useEffect(() => {
     if (!ready || !serverReady) return;
@@ -744,6 +753,17 @@ export default function Home() {
     } catch (error) { window.alert(error instanceof Error ? error.message : "The file could not be saved to Kairos."); }
   }
 
+  async function deleteUpload(attachment: Attachment) {
+    if (!window.confirm(`Delete “${attachment.name}” from Kairos?`)) return;
+    try {
+      const response = await fetch(`/api/attachments/${encodeURIComponent(attachment.id)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("The file could not be deleted.");
+      setUploads((current) => current.filter((item) => item.id !== attachment.id));
+      setTasks((current) => current.map((task) => ({ ...task, steps: task.steps.map((step) => step.attachment?.id === attachment.id ? { ...step, attachment: undefined } : step) })));
+      recordActivity("removed", "attachment", `Deleted uploaded file “${attachment.name}”.`);
+    } catch (error) { window.alert(error instanceof Error ? error.message : "The file could not be deleted."); }
+  }
+
   async function askAi() {
     const question = aiQuestion.trim();
     if (!question) return;
@@ -785,14 +805,14 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div className="topbar-intro">{currentView === "journeys" && <><p className="eyebrow date-label">{headerDateLabel}</p><h1>{greeting}, Christian.</h1><p className="topbar-sub">Three journeys need your attention today.</p></>}</div>
-          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}</div>}</div><button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></div>
+          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
 
         {currentView === "settings" ? <section className="settings-page">
           <div className="settings-head"><div><p className="eyebrow">PERSONAL SETTINGS</p><h2>Organize your system</h2><p>Keep projects and vocabulary useful as your work changes.</p></div></div>
-          <div className="settings-tabs"><button className={settingsTab === "tags" ? "active" : ""} onClick={() => setSettingsTab("tags")}>Tags <span>{Object.keys(tagLibrary).length}</span></button><button className={settingsTab === "workspaces" ? "active" : ""} onClick={() => setSettingsTab("workspaces")}>Workspaces <span>{Object.keys(workspaces).length}</span></button><button className={settingsTab === "activity" ? "active" : ""} onClick={() => setSettingsTab("activity")}>Activity log <span>{activityLog.length}</span></button><button className={settingsTab === "data" ? "active" : ""} onClick={() => setSettingsTab("data")}>Data</button></div>
+          <div className="settings-tabs"><button className={settingsTab === "tags" ? "active" : ""} onClick={() => setSettingsTab("tags")}>Tags <span>{Object.keys(tagLibrary).length}</span></button><button className={settingsTab === "workspaces" ? "active" : ""} onClick={() => setSettingsTab("workspaces")}>Workspaces <span>{Object.keys(workspaces).length}</span></button><button className={settingsTab === "activity" ? "active" : ""} onClick={() => setSettingsTab("activity")}>Activity log <span>{activityLog.length}</span></button><button className={settingsTab === "uploads" ? "active" : ""} onClick={() => setSettingsTab("uploads")}>Uploads <span>{uploads.length}</span></button><button className={settingsTab === "data" ? "active" : ""} onClick={() => setSettingsTab("data")}>Data</button></div>
           {settingsTab === "tags" ? <><div className="settings-card">
             <div className="tag-table-head"><span>Tag</span><span>Color</span><span>Used on</span><span /></div>
             {Object.entries(tagLibrary).map(([tag, color]) => <div className="tag-setting-row" key={tag}>
@@ -811,7 +831,7 @@ export default function Home() {
               {name === ON_HOLD_WORKSPACE ? <span className="workspace-status system">System</span> : <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Live" : "Closed"}</button>}
             </div>)}
             <div className="new-workspace-row"><input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} placeholder="New workspace name"/><label className="color-picker"><input type="color" value={newWorkspaceColor} onChange={(e) => setNewWorkspaceColor(e.target.value)}/><span>{newWorkspaceColor.toUpperCase()}</span></label><button onClick={() => { const name = newWorkspaceName.trim(); if (name && !Object.prototype.hasOwnProperty.call(workspaces, name)) { setWorkspaces((current) => ({ ...current, [name]: { description: "A collection of related tasks and journeys.", color: newWorkspaceColor, active: true } })); setNewWorkspaceName(""); } }}>＋ New workspace</button></div>
-          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : settingsTab === "activity" ? <section className="activity-log-page"><div className="settings-card activity-log-card">{activityLog.length === 0 ? <div className="empty"><span>◌</span><h3>No activity yet</h3><p>Your latest Kairos changes will appear here.</p></div> : [...activityLog].reverse().map((entry) => <article className="activity-log-row" key={entry.id}><span className={`activity-action ${entry.action}`}>{entry.action}</span><div><strong>{entry.message}</strong><time>{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></div></article>)}</div></section> : <><div className="settings-card data-settings-card">
+          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : settingsTab === "activity" ? <section className="activity-log-page"><div className="settings-card activity-log-card">{activityLog.length === 0 ? <div className="empty"><span>◌</span><h3>No activity yet</h3><p>Your latest Kairos changes will appear here.</p></div> : [...activityLog].reverse().map((entry) => <article className="activity-log-row" key={entry.id}><span className={`activity-action ${entry.action}`}>{entry.action}</span><div><strong>{entry.message}</strong><time>{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></div></article>)}</div></section> : settingsTab === "uploads" ? <><div className="settings-card uploads-card">{uploads.length === 0 ? <div className="empty"><span>⌁</span><h3>No uploads yet</h3><p>Files attached to steps will appear here.</p></div> : uploads.map((attachment) => <article className="upload-row" key={attachment.id}><div><strong>{attachment.name}</strong><small>{Math.ceil(attachment.size / 1024)} KB · {attachment.type || "File"}</small></div><div><a className="save-btn" href={`/api/attachments/${encodeURIComponent(attachment.id)}`} target="_blank" rel="noreferrer">Open</a><button className="save-btn" onClick={() => deleteUpload(attachment)}>Delete</button></div></article>)}</div><div className="settings-note"><span>i</span><p><strong>Files stored with Kairos</strong>Uploads are stored on the Kairos server and can be removed here. Deleting a file also clears its step attachment.</p></div></> : <><div className="settings-card data-settings-card">
             <div><p className="eyebrow">STORAGE</p><h3>Your Kairos data</h3><p>{saveState === "saved" ? "Saved securely to this Kairos server." : saveState === "saving" ? "Saving your latest changes…" : saveState === "offline" ? "Offline: local data is shown until the server reconnects." : `Save failed: ${saveError || "the server did not accept the change."}`}</p></div>
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
