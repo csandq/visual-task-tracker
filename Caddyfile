@@ -6,6 +6,7 @@
     reverse_proxy host.docker.internal:8787
   }
   handle_path /kairos* {
+    rewrite * /
     reverse_proxy web:3000
   }
   handle {
