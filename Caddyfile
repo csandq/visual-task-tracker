@@ -1,7 +1,12 @@
 :80 {
   encode zstd gzip
+  redir / /kairos 308
+  redir /kairos.html /kairos 308
   handle /api/* {
-    reverse_proxy api:8787
+    reverse_proxy host.docker.internal:8787
+  }
+  handle_path /kairos* {
+    reverse_proxy web:3000
   }
   handle {
     reverse_proxy web:3000

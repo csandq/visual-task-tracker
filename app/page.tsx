@@ -5,20 +5,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type Status = "done" | "in-progress" | "blocked" | "todo";
 type Priority = "High" | "Medium" | "Low";
 type ActivityEntry = { id: number; message: string; timestamp: string; status?: Status };
-type Step = { id: number; label: string; status: Status; note: string; deadline: string; people?: string; owner?: string; attachment?: string; activity?: ActivityEntry[] };
-type Task = { id: number; title: string; project: string; tags: string[]; priority: Priority; steps: Step[]; links?: string[]; dependencies?: number[] };
+type Attachment = { id: string; name: string; size: number; type: string };
+type Step = { id: number; label: string; status: Status; note: string; deadline: string; people?: string; owner?: string; attachment?: Attachment; activity?: ActivityEntry[] };
+type Task = { id: number; title: string; project: string; tags: string[]; priority: Priority; steps: Step[]; links?: string[]; dependencies?: number[]; pausedFrom?: string };
+type ActivityLogEntry = { id: number; timestamp: string; action: "added" | "edited" | "removed" | "moved"; entity: "journey" | "step" | "tag" | "workspace" | "attachment"; message: string };
 type KairosData = {
   version: 1;
   exportedAt?: string;
   tasks: Task[];
   tagLibrary: Record<string, string>;
   workspaces: Record<string, { description: string; color: string; active: boolean }>;
+  activityLog?: ActivityLogEntry[];
+  dismissedNotifications?: number[];
 };
+
+const ON_HOLD_WORKSPACE = "On hold";
 
 const defaultWorkspaces: Record<string, { description: string; color: string; active: boolean }> = {
   "Brand refresh": { description: "Campaigns, identity work, and how Kairos shows up in the world.", color: "#b89acb", active: true },
   "Product experience": { description: "Improvements to the product journey, research, and customer experience.", color: "#b6da78", active: true },
   "Content engine": { description: "Stories, editorial work, and reusable content for the business.", color: "#e9a66d", active: true },
+  [ON_HOLD_WORKSPACE]: { description: "Paused journeys waiting for the right moment, decision, or dependency.", color: "#85858b", active: true },
 };
 
 const seedTasks: Task[] = [
@@ -122,7 +129,7 @@ function normalizeTasks(tasks: Task[]) {
     tags: Array.isArray(task.tags) ? task.tags : [],
     links: Array.isArray(task.links) ? task.links : [],
     dependencies: Array.isArray(task.dependencies) ? [...new Set(task.dependencies.filter((id) => id !== task.id))] : [],
-    steps: Array.isArray(task.steps) ? task.steps.map((step) => ({ ...step, note: step.note ?? "", deadline: normalizeDeadline(step.deadline ?? ""), activity: step.activity ?? [] })) : [],
+    steps: Array.isArray(task.steps) ? task.steps.map((step) => ({ ...step, note: step.note ?? "", deadline: normalizeDeadline(step.deadline ?? ""), activity: step.activity ?? [], attachment: typeof step.attachment === "string" ? { id: "legacy", name: step.attachment, size: 0, type: "application/octet-stream" } : step.attachment })) : [],
   }));
 }
 
@@ -136,7 +143,8 @@ function normalizeData(data: KairosData): KairosData {
   for (const project of new Set(tasks.map((task) => task.project))) {
     if (!workspaces[project]) workspaces[project] = { description: "A collection of related tasks and journeys.", color: "#91a09a", active: true };
   }
-  return { ...data, tasks, tagLibrary, workspaces };
+  if (!workspaces[ON_HOLD_WORKSPACE]) workspaces[ON_HOLD_WORKSPACE] = defaultWorkspaces[ON_HOLD_WORKSPACE];
+  return { ...data, tasks, tagLibrary, workspaces, activityLog: Array.isArray(data.activityLog) ? data.activityLog.slice(-200) : [], dismissedNotifications: Array.isArray(data.dismissedNotifications) ? data.dismissedNotifications : [] };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -204,7 +212,7 @@ export default function Home() {
   const [newTitle, setNewTitle] = useState("");
   const [newWorkspace, setNewWorkspace] = useState("");
   const [dragged, setDragged] = useState<number | null>(null);
-  const [collapsedTasks, setCollapsedTasks] = useState<number[]>([]);
+  const [collapsedTasks, setCollapsedTasks] = useState<number[]>(() => seedTasks.map((task) => task.id));
   const [ready, setReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
@@ -217,7 +225,7 @@ export default function Home() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#668d74");
   const [workspaces, setWorkspaces] = useState(defaultWorkspaces);
-  const [settingsTab, setSettingsTab] = useState<"tags" | "workspaces" | "data">("tags");
+  const [settingsTab, setSettingsTab] = useState<"tags" | "workspaces" | "data" | "activity">("tags");
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [newWorkspaceColor, setNewWorkspaceColor] = useState("#7b9b88");
   const [saveState, setSaveState] = useState<"saved" | "saving" | "error" | "offline">("offline");
@@ -229,6 +237,10 @@ export default function Home() {
   const [aiRefresh, setAiRefresh] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiQuestionState, setAiQuestionState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [formError, setFormError] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
@@ -248,6 +260,9 @@ export default function Home() {
           setTasks(data.tasks);
           setTagLibrary(data.tagLibrary);
           setWorkspaces(data.workspaces);
+          setActivityLog(data.activityLog ?? []);
+          setDismissedNotificationIds(data.dismissedNotifications ?? []);
+          setCollapsedTasks(data.tasks.map((task) => task.id));
           setServerReady(true);
           setSaveState("saved");
           setSaveError("");
@@ -262,15 +277,22 @@ export default function Home() {
         const savedTasks = localStorage.getItem("kairos-tasks-v1");
         const savedTags = localStorage.getItem("kairos-tag-library-v1");
         const savedWorkspaces = localStorage.getItem("kairos-workspaces-v1");
+        const savedActivity = localStorage.getItem("kairos-activity-log-v1");
+        const savedDismissed = localStorage.getItem("kairos-dismissed-notifications-v1");
         const localData = normalizeData({
           version: 1,
           tasks: savedTasks ? JSON.parse(savedTasks) as Task[] : seedTasks,
           tagLibrary: savedTags ? JSON.parse(savedTags) as Record<string, string> : defaultTagColors,
           workspaces: savedWorkspaces ? JSON.parse(savedWorkspaces) as KairosData["workspaces"] : defaultWorkspaces,
+          activityLog: savedActivity ? JSON.parse(savedActivity) as ActivityLogEntry[] : [],
+          dismissedNotifications: savedDismissed ? JSON.parse(savedDismissed) as number[] : [],
         });
         setTasks(localData.tasks);
         setTagLibrary(localData.tagLibrary);
         setWorkspaces(localData.workspaces);
+        setActivityLog(localData.activityLog ?? []);
+        setDismissedNotificationIds(localData.dismissedNotifications ?? []);
+        setCollapsedTasks(localData.tasks.map((task) => task.id));
       } catch {
         // Browser storage is optional; the server remains authoritative.
       }
@@ -297,10 +319,18 @@ export default function Home() {
   }, [workspaces, ready]);
 
   useEffect(() => {
+    if (ready) localStorage.setItem("kairos-activity-log-v1", JSON.stringify(activityLog));
+  }, [activityLog, ready]);
+
+  useEffect(() => {
+    if (ready) localStorage.setItem("kairos-dismissed-notifications-v1", JSON.stringify(dismissedNotificationIds));
+  }, [dismissedNotificationIds, ready]);
+
+  useEffect(() => {
     if (!ready || !serverReady) return;
     const attempt = ++saveAttemptRef.current;
     const timer = window.setTimeout(async () => {
-      const data: KairosData = { version: 1, tasks, tagLibrary, workspaces };
+      const data: KairosData = { version: 1, tasks, tagLibrary, workspaces, activityLog, dismissedNotifications: dismissedNotificationIds };
       setSaveState("saving");
       setSaveError("");
       try {
@@ -319,7 +349,7 @@ export default function Home() {
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [tasks, tagLibrary, workspaces, ready, serverReady]);
+  }, [tasks, tagLibrary, workspaces, activityLog, dismissedNotificationIds, ready, serverReady]);
 
   useEffect(() => {
     function focusSearch(event: KeyboardEvent) {
@@ -446,8 +476,14 @@ export default function Home() {
   const headerDateLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }).toUpperCase();
   const greeting = greetingForHour(new Date().getHours());
 
+  function recordActivity(action: ActivityLogEntry["action"], entity: ActivityLogEntry["entity"], message: string) {
+    setActivityLog((current) => [...current, { id: Date.now() * 1000 + Math.floor(Math.random() * 1000), timestamp: new Date().toISOString(), action, entity, message }].slice(-200));
+  }
+
   function updateTask(taskId: number, patch: Partial<Task>) {
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, ...patch } : task));
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) recordActivity("edited", "journey", `Edited journey “${task.title}”.`);
   }
 
   function toggleTaskCollapsed(taskId: number) {
@@ -466,19 +502,23 @@ export default function Home() {
     if (!name || name === oldName || Object.prototype.hasOwnProperty.call(tagLibrary, name)) return;
     setTagLibrary((current) => { const next = { ...current, [name]: current[oldName] }; delete next[oldName]; return next; });
     setTasks((current) => current.map((task) => ({ ...task, tags: task.tags.map((tag) => tag === oldName ? name : tag) })));
+    recordActivity("edited", "tag", `Renamed tag “${oldName}” to “${name}”.`);
   }
 
   function deleteTag(tagName: string) {
     setTagLibrary((current) => { const next = { ...current }; delete next[tagName]; return next; });
     setTasks((current) => current.map((task) => ({ ...task, tags: task.tags.filter((tag) => tag !== tagName) })));
+    recordActivity("removed", "tag", `Removed tag “${tagName}”.`);
   }
 
   function renameWorkspace(oldName: string, nextName: string) {
+    if (oldName === ON_HOLD_WORKSPACE) return;
     const name = nextName.trim();
     if (!name || name === oldName || Object.prototype.hasOwnProperty.call(workspaces, name)) return;
     setWorkspaces((current) => { const next = { ...current, [name]: current[oldName] }; delete next[oldName]; return next; });
     setTasks((current) => current.map((task) => task.project === oldName ? { ...task, project: name } : task));
     if (activeWorkspace === oldName) setActiveWorkspace(name);
+    recordActivity("edited", "workspace", `Renamed workspace “${oldName}” to “${name}”.`);
   }
 
   function updateStep(patch: Partial<Step>) {
@@ -487,6 +527,9 @@ export default function Home() {
       ...task,
       steps: task.steps.map((step) => step.id === selected.stepId ? { ...step, ...patch } : step),
     }));
+    const task = tasks.find((item) => item.id === selected.taskId);
+    const step = task?.steps.find((item) => item.id === selected.stepId);
+    if (task && step) recordActivity("edited", "step", `Edited step “${step.label}” in “${task.title}”.`);
   }
 
   function setStepStatus(taskId: number, stepId: number, status: Status) {
@@ -499,6 +542,10 @@ export default function Home() {
         activity: [{ id: Date.now(), message: `You moved this step to ${statusLabel[status].toLowerCase()}`, timestamp, status }, ...(step.activity ?? [])].slice(0, 20),
       }),
     }));
+    const task = tasks.find((item) => item.id === taskId);
+    const step = task?.steps.find((item) => item.id === stepId);
+    if (task && step) recordActivity("moved", "step", `Moved “${step.label}” in “${task.title}” to ${statusLabel[status].toLowerCase()}.`);
+    if (status !== "blocked") setDismissedNotificationIds((current) => current.filter((id) => id !== stepId));
   }
 
   function openNewTask() {
@@ -535,19 +582,25 @@ export default function Home() {
     setNewWorkspace("");
     setFormError("");
     setShowNew(false);
+    recordActivity("added", "journey", `Created journey “${newTitle.trim()}”.`);
   }
 
   function deleteTask(taskId: number) {
+    const task = tasks.find((item) => item.id === taskId);
     setTasks((current) => current.filter((task) => task.id !== taskId));
     if (selected?.taskId === taskId) setSelected(null);
     if (editTaskId === taskId) setEditTaskId(null);
+    if (task) recordActivity("removed", "journey", `Removed journey “${task.title}”.`);
   }
 
   function deleteSelectedStep() {
     if (!selected) return;
     const { taskId, stepId } = selected;
+    const task = tasks.find((item) => item.id === taskId);
+    const step = task?.steps.find((item) => item.id === stepId);
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, steps: task.steps.filter((step) => step.id !== stepId) } : task));
     setSelected(null);
+    if (task && step) recordActivity("removed", "step", `Removed step “${step.label}” from “${task.title}”.`);
   }
 
   function addStep(taskId: number) {
@@ -556,12 +609,28 @@ export default function Home() {
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, steps: [...task.steps, step] } : task));
     setSelected({ taskId, stepId });
     setEditTaskId(null);
+    const task = tasks.find((item) => item.id === taskId);
+    if (task) recordActivity("added", "step", `Added a new step to “${task.title}”.`);
+  }
+
+  function pauseTask(task: Task) {
+    if (task.project === ON_HOLD_WORKSPACE) return;
+    updateTask(task.id, { project: ON_HOLD_WORKSPACE, pausedFrom: task.project });
+    recordActivity("moved", "journey", `Paused journey “${task.title}” in On hold.`);
+    setEditTaskId(null);
+  }
+
+  function resumeTask(task: Task) {
+    const fallback = Object.entries(workspaces).find(([name, info]) => info.active && name !== ON_HOLD_WORKSPACE)?.[0] ?? "Brand refresh";
+    updateTask(task.id, { project: task.pausedFrom && workspaces[task.pausedFrom] ? task.pausedFrom : fallback, pausedFrom: undefined });
+    recordActivity("moved", "journey", `Resumed journey “${task.title}”.`);
+    setEditTaskId(null);
   }
 
   async function retrySave() {
     setSaveState("saving");
     setSaveError("");
-    const data: KairosData = { version: 1, tasks, tagLibrary, workspaces };
+    const data: KairosData = { version: 1, tasks, tagLibrary, workspaces, activityLog, dismissedNotifications: dismissedNotificationIds };
     const attempt = ++saveAttemptRef.current;
     try {
       const response = await fetch("/api/state", {
@@ -593,7 +662,7 @@ export default function Home() {
   }
 
   function exportData() {
-    const data: KairosData = { version: 1, exportedAt: new Date().toISOString(), tasks, tagLibrary, workspaces };
+    const data: KairosData = { version: 1, exportedAt: new Date().toISOString(), tasks, tagLibrary, workspaces, activityLog, dismissedNotifications: dismissedNotificationIds };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -608,8 +677,40 @@ export default function Home() {
       setTasks(data.tasks);
       setTagLibrary(data.tagLibrary);
       setWorkspaces(data.workspaces);
+      setActivityLog(data.activityLog ?? []);
+      setDismissedNotificationIds(data.dismissedNotifications ?? []);
+      setCollapsedTasks(data.tasks.map((task) => task.id));
       setSaveError("");
     } catch (error) { window.alert(error instanceof Error ? error.message : "That file is not a valid Kairos backup."); }
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!selected) return;
+    if (file.size > 10 * 1024 * 1024) { window.alert("Files must be 10 MB or smaller."); return; }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+    try {
+      const response = await fetch("/api/attachments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, type: file.type || "application/octet-stream", data: btoa(binary) }) });
+      if (!response.ok) throw new Error("The file could not be saved to Kairos.");
+      const payload = await response.json() as { attachment: Attachment };
+      updateStep({ attachment: payload.attachment });
+      recordActivity("added", "attachment", `Attached “${file.name}” to a step.`);
+    } catch (error) { window.alert(error instanceof Error ? error.message : "The file could not be saved to Kairos."); }
+  }
+
+  async function askAi() {
+    const question = aiQuestion.trim();
+    if (!question) return;
+    setAiQuestionState("loading");
+    setAiAnswer("");
+    try {
+      const response = await fetch("/api/ai-summary", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ question, data: { version: 1, tasks, tagLibrary, workspaces } }) });
+      if (!response.ok) throw new Error("Kairos AI is unavailable.");
+      const payload = await response.json() as { memo?: string };
+      setAiAnswer(payload.memo ?? "No answer returned.");
+      setAiQuestionState("ready");
+    } catch (error) { setAiAnswer(error instanceof Error ? error.message : "Kairos AI is unavailable."); setAiQuestionState("error"); }
   }
 
   if (!ready) {
@@ -645,7 +746,7 @@ export default function Home() {
 
         {currentView === "settings" ? <section className="settings-page">
           <div className="settings-head"><div><p className="eyebrow">PERSONAL SETTINGS</p><h2>Organize your system</h2><p>Keep projects and vocabulary useful as your work changes.</p></div></div>
-          <div className="settings-tabs"><button className={settingsTab === "tags" ? "active" : ""} onClick={() => setSettingsTab("tags")}>Tags <span>{Object.keys(tagLibrary).length}</span></button><button className={settingsTab === "workspaces" ? "active" : ""} onClick={() => setSettingsTab("workspaces")}>Workspaces <span>{Object.keys(workspaces).length}</span></button><button className={settingsTab === "data" ? "active" : ""} onClick={() => setSettingsTab("data")}>Data</button></div>
+          <div className="settings-tabs"><button className={settingsTab === "tags" ? "active" : ""} onClick={() => setSettingsTab("tags")}>Tags <span>{Object.keys(tagLibrary).length}</span></button><button className={settingsTab === "workspaces" ? "active" : ""} onClick={() => setSettingsTab("workspaces")}>Workspaces <span>{Object.keys(workspaces).length}</span></button><button className={settingsTab === "activity" ? "active" : ""} onClick={() => setSettingsTab("activity")}>Activity log <span>{activityLog.length}</span></button><button className={settingsTab === "data" ? "active" : ""} onClick={() => setSettingsTab("data")}>Data</button></div>
           {settingsTab === "tags" ? <><div className="settings-card">
             <div className="tag-table-head"><span>Tag</span><span>Color</span><span>Used on</span><span /></div>
             {Object.entries(tagLibrary).map(([tag, color]) => <div className="tag-setting-row" key={tag}>
@@ -661,10 +762,10 @@ export default function Home() {
             {Object.entries(workspaces).map(([name, info]) => <div className="workspace-setting-row" key={name}>
               <div className="workspace-name-edit"><div className="workspace-edit-line"><i style={{ background: info.color }}/><input defaultValue={name} aria-label={`Rename ${name}`} onBlur={(e) => renameWorkspace(name, e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}/><label className="color-picker" title="Change workspace colour"><input type="color" value={info.color} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], color: e.target.value } }))}/><span>{info.color.toUpperCase()}</span></label></div><textarea value={info.description} aria-label={`${name} description`} onChange={(e) => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], description: e.target.value } }))}/></div>
               <span className="usage-count">{tasks.filter((task) => task.project === name).length} tasks</span>
-              <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Live" : "Closed"}</button>
+              {name === ON_HOLD_WORKSPACE ? <span className="workspace-status system">System</span> : <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Live" : "Closed"}</button>}
             </div>)}
             <div className="new-workspace-row"><input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} placeholder="New workspace name"/><label className="color-picker"><input type="color" value={newWorkspaceColor} onChange={(e) => setNewWorkspaceColor(e.target.value)}/><span>{newWorkspaceColor.toUpperCase()}</span></label><button onClick={() => { const name = newWorkspaceName.trim(); if (name && !Object.prototype.hasOwnProperty.call(workspaces, name)) { setWorkspaces((current) => ({ ...current, [name]: { description: "A collection of related tasks and journeys.", color: newWorkspaceColor, active: true } })); setNewWorkspaceName(""); } }}>＋ New workspace</button></div>
-          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : <><div className="settings-card data-settings-card">
+          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : settingsTab === "activity" ? <section className="activity-log-page"><div className="settings-card activity-log-card">{activityLog.length === 0 ? <div className="empty"><span>◌</span><h3>No activity yet</h3><p>Your latest Kairos changes will appear here.</p></div> : [...activityLog].reverse().map((entry) => <article className="activity-log-row" key={entry.id}><span className={`activity-action ${entry.action}`}>{entry.action}</span><div><strong>{entry.message}</strong><time>{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></div></article>)}</div></section> : <><div className="settings-card data-settings-card">
             <div><p className="eyebrow">STORAGE</p><h3>Your Kairos data</h3><p>{saveState === "saved" ? "Saved securely to this Kairos server." : saveState === "saving" ? "Saving your latest changes…" : saveState === "offline" ? "Offline: local data is shown until the server reconnects." : `Save failed: ${saveError || "the server did not accept the change."}`}</p></div>
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
@@ -679,7 +780,7 @@ export default function Home() {
           {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open tasks</h3><p>Every step is done. Add a new journey to keep moving.</p></div>}
         </section> : <>
         <section className="overview">
-          <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong><p>{aiState === "ready" ? aiSummary : focusRecommendation}</p>{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh memo</button>}</div>
+          <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong><p>{aiState === "ready" ? aiSummary : focusRecommendation}</p><form className="ai-ask" onSubmit={(event) => { event.preventDefault(); askAi(); }}><input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about your journeys…" aria-label="Ask Kairos AI"/><button type="submit" disabled={aiQuestionState === "loading"}>{aiQuestionState === "loading" ? "Thinking…" : "Ask"}</button></form>{aiAnswer && <p className={`ai-answer ${aiQuestionState}`} aria-live="polite">{aiAnswer}</p>}{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh memo</button>}</div>
           <div className="overview-stat"><span>IN MOTION</span><strong>{inMotionCount}</strong></div>
           <div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong></div>
           <div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div>
@@ -749,7 +850,7 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className="panel-footer"><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="major-button" onClick={() => setEditTaskId(null)}>Done</button></div>
+          <div className="panel-footer"><span>Changes save automatically</span>{taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="major-button" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="major-button pause-button" onClick={() => pauseTask(taskToEdit)}>Pause task</button>}<button className="delete-action" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="major-button" onClick={() => setEditTaskId(null)}>Done</button></div>
         </aside>
       )}
 
@@ -767,7 +868,7 @@ export default function Home() {
             <input id="step-people" className="people-input" value={selectedStep.people ?? ""} onChange={(e) => updateStep({ people: e.target.value })} placeholder="e.g. Alex, client legal team" />
             <label className="field-label" htmlFor="step-notes">Notes</label>
             <textarea id="step-notes" value={selectedStep.note} onChange={(e) => updateStep({ note: e.target.value })} placeholder="Add context, decisions, or links…" />
-            <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) updateStep({ attachment: file.name }); e.currentTarget.value = ""; }} /></label></div>
+            <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment.name}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) uploadAttachment(file); e.currentTarget.value = ""; }} /></label>{selectedStep.attachment && <a className="attachment-download" href={`/api/attachments/${encodeURIComponent(selectedStep.attachment.id)}`} target="_blank" rel="noreferrer">Open</a>}</div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
           <div className="panel-footer step-footer"><button className="journey-link" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><span>Changes save automatically</span><button className="delete-action" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="major-button" onClick={() => setSelected(null)}>Done</button></div>

@@ -629,6 +629,34 @@ body, button, input, textarea, select,
   .detail-panel .panel-body { padding:18px 16px; }
 }
 
+/* Keep the collapsed rail control on the rail edge, clear of the Kairos mark. */
+.collapse-toggle, .sidebar-collapsed .collapse-toggle { top:50%; right:-12px; transform:translateY(-50%); }
+.workspace-status.system { background:var(--mock-chip); color:var(--mock-muted); cursor:default; }
+.activity-log-page { max-width:none; margin:10px 0 60px; }
+.activity-log-card { overflow:hidden; }
+.activity-log-row { display:grid; grid-template-columns:82px 1fr; gap:16px; align-items:start; padding:15px 18px; border-bottom:1px solid var(--mock-rule); }
+.activity-log-row:last-child { border-bottom:0; }
+.activity-log-row strong, .activity-log-row time { display:block; font-family:var(--mock-sans); }
+.activity-log-row strong { color:var(--mock-text); font-size:12px; font-weight:400; }
+.activity-log-row time { margin-top:5px; color:var(--mock-faint); font-size:10px; }
+.activity-action { width:max-content; padding:4px 7px; border-radius:999px; color:var(--mock-muted); background:var(--mock-chip); font-family:var(--mock-mono); font-size:9px; letter-spacing:.06em; text-transform:uppercase; }
+.activity-action.added { color:var(--mock-pos); background:#7fd18f18; }
+.activity-action.removed { color:var(--mock-neg); background:#e27d6b18; }
+.activity-action.moved { color:var(--mock-warn); background:#d9b45f18; }
+.attachment-download { margin-left:10px; color:var(--mock-text); font-family:var(--mock-sans); font-size:11px; }
+.ai-ask { display:flex; max-width:560px; gap:7px; margin-top:13px; }
+.ai-ask input { min-width:0; flex:1; height:32px; padding:0 10px; border:1px solid var(--mock-rule-2); border-radius:8px; color:var(--mock-text); background:var(--mock-chip); font-family:var(--mock-sans); font-size:11px; outline:0; }
+.ai-ask input:focus { border-color:var(--mock-muted); }
+.ai-ask button { min-width:52px; border:0; border-radius:8px; color:var(--mock-bg); background:var(--mock-text); font-family:var(--mock-sans); font-size:11px; cursor:pointer; }
+.ai-ask button:disabled { opacity:.5; cursor:wait; }
+.ai-answer { padding-left:10px; border-left:2px solid var(--mock-pos); }
+.ai-answer.error { border-color:var(--mock-neg); color:var(--mock-neg)!important; }
+
+@media (max-width:820px) {
+  .collapse-toggle, .sidebar-collapsed .collapse-toggle { display:none; }
+  .activity-log-row { grid-template-columns:1fr; gap:8px; }
+}
+
 h1, h2, h3, h4, h5, h6,
 .brand-name, .brand small, .overview strong, .overview-stat strong, .content-head h2,
 .workspace-context h2, .workspace-summary strong, .task-meta h3, .completion strong,

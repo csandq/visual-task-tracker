@@ -10,10 +10,12 @@ services:
       context: .
       dockerfile: Dockerfile.api
     restart: unless-stopped
+    network_mode: host
+    environment:
+      KAIROS_AI_URL: http://127.0.0.1:8080/v1/chat/completions
+      KAIROS_AI_MODEL: Qwen3-4B-Q4_K_M.gguf
     volumes:
       - ./data:/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 30s
@@ -28,6 +30,8 @@ services:
         condition: service_healthy
       web:
         condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"
     volumes:
