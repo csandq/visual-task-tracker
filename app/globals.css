@@ -625,7 +625,7 @@ body, button, input, textarea, select,
 .panel-head-actions { display:flex; align-items:flex-start; gap:10px; }
 .panel-head-actions .panel-expand { width:auto; height:28px; padding:0 9px; border:1px solid var(--mock-rule-2); border-radius:7px; background:var(--mock-chip); color:var(--mock-text)!important; font:10px var(--mock-sans); line-height:28px; white-space:nowrap; }
 .panel-head-actions .panel-expand:hover { color:var(--mock-text); background:var(--mock-hi); }
-.details-fullscreen { position:fixed!important; z-index:30; top:5vh; right:5vw; bottom:5vh; width:min(70vw,980px)!important; max-width:none; border:1px solid var(--mock-rule-2); border-radius:14px; box-shadow:0 24px 80px #000b; }
+.details-fullscreen { position:fixed!important; z-index:30; top:5vh; left:calc(50% + 120px); right:auto; bottom:5vh; width:min(70vw,980px)!important; max-width:none; transform:translateX(-50%); border:1px solid var(--mock-rule-2); border-radius:14px; box-shadow:0 24px 80px #000b; }
 .details-fullscreen .panel-body { padding:26px 30px; }
 .panel-scrim { z-index:9; background:transparent; }
 .panel-scrim-dark { background:#0007; }
@@ -848,9 +848,11 @@ h1, h2, h3, h4, h5, h6,
 .momentum-stats .overview-stat.blocked span, .momentum-stats .overview-stat.blocked p { color:var(--mock-warn); }
 .urgent-focus { min-height:116px!important; display:flex; align-items:flex-start; }
 .urgent-focus>span { color:var(--mock-muted); font-size:12px; letter-spacing:.1em; }
+.urgent-focus .urgent-step-list { margin-top:12px; }
+.urgent-focus .urgent-step-list button { padding:4px 0; }
 .overview-metrics { gap:9px; padding-top:13px; }
 .momentum-head small { display:none; }
-.overview-metrics .mini-progress { display:grid; grid-template-columns:auto 190px 1fr; align-items:center; gap:16px; }
+.overview-metrics .mini-progress { display:grid; grid-template-columns:auto 190px; align-items:center; gap:16px; }
 .overview-metrics .mini-progress > span { display:flex; flex-direction:column; gap:4px; }
 .overview-metrics .mini-progress > span b { color:var(--mock-muted); font:10px var(--mock-sans); letter-spacing:0; white-space:nowrap; }
 .weekly-days { display:flex; align-items:stretch; justify-content:space-between; height:66px; gap:10px; }
@@ -858,6 +860,7 @@ h1, h2, h3, h4, h5, h6,
 .weekly-days span { color:var(--mock-muted); font:10px var(--mock-mono); }
 .weekly-days i { display:block; width:10px; min-height:8px; border-radius:999px; background:var(--mock-pos); opacity:.9; }
 .weekly-days b { color:var(--mock-faint); font:9px var(--mock-mono); }
+.weekly-days { display:none!important; }
 
 .overview-metrics { display:grid; grid-template-columns:1fr; gap:12px; padding:18px 20px; }
 .momentum-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -867,6 +870,7 @@ h1, h2, h3, h4, h5, h6,
 .momentum-head small { display:block; margin-top:4px; color:var(--mock-muted); font-size:13px; }
 .momentum-status { display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--mock-rule-2); border-radius:999px; color:var(--mock-muted); font-size:12px; white-space:nowrap; }
 .momentum-status i { width:9px; height:9px; border-radius:50%; background:var(--mock-pos); }
+.momentum-status i { box-shadow:0 0 6px 2px #7fd18f99; }
 .momentum-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .momentum-stats .overview-stat { min-height:150px; padding:20px!important; align-items:flex-start; justify-content:flex-start; text-align:left; border:1px solid var(--mock-rule-2); border-radius:12px; background:var(--mock-bg); }
 .momentum-stats .overview-stat.blocked { border-left:1px solid var(--mock-rule-2)!important; }
@@ -878,7 +882,5 @@ h1, h2, h3, h4, h5, h6,
   .momentum-head { align-items:flex-start; flex-direction:column; }
   .momentum-status { align-self:flex-start; }
   .calendar-workspace-filter span { display:none; }
-  .details-fullscreen { top:2vh; right:2vw; bottom:2vh; width:96vw!important; }
-  .overview-metrics .mini-progress { grid-template-columns:1fr; height:auto; }
-  .weekly-days { min-height:66px; }
+  .details-fullscreen { top:2vh; left:50%; right:auto; bottom:2vh; width:96vw!important; transform:translateX(-50%); }
 }
