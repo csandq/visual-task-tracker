@@ -124,6 +124,13 @@ function formatDeadline(value: string) {
   return date ? date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : value;
 }
 
+function daysUntil(value: string, now = new Date()) {
+  const date = parseDateKey(normalizeDeadline(value));
+  if (!date) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.ceil((date.getTime() - today.getTime()) / 86_400_000);
+}
+
 function normalizeTasks(tasks: Task[]) {
   return tasks.map((task) => ({
     ...task,
@@ -192,22 +199,12 @@ function greetingForHour(hour: number) {
 }
 
 function viewForPath(pathname: string): View {
+  if (pathname.endsWith("/work")) return "journeys";
   if (pathname.endsWith("/my-tasks")) return "my-tasks";
   if (pathname.endsWith("/calendar")) return "calendar";
-  if (pathname.endsWith("/backlog")) return "backlog";
+  if (pathname.endsWith("/backlog") || pathname.endsWith("/start")) return "backlog";
   if (pathname.endsWith("/settings")) return "settings";
-  return "journeys";
-}
-
-function memoLines(value: string) {
-  return value.replace(/\s+(?=(?:[-•*]\s|[A-Z][^.!?]{1,44}:))/g, "\n").replace(/([.!?])\s+(?=[A-Z0-9])/g, "$1\n").split(/\n+/).map((line) => line.trim()).filter(Boolean);
-}
-
-function memoParts(line: string) {
-  const heading = /^\*\*(.+?)\*\*$/.exec(line);
-  const bullet = /^[-•*]\s+/.test(line);
-  const content = line.replace(/^[-•*]\s+/, "").replace(/^\*\*(.+?)\*\*$/, "$1");
-  return { heading: Boolean(heading), bullet, parts: content.split(/(\*\*.+?\*\*)/g).filter(Boolean) };
+  return "backlog";
 }
 
 function normalizeLink(rawValue: string) {
@@ -227,6 +224,9 @@ export default function Home() {
   const [selected, setSelected] = useState<{ taskId: number; stepId: number } | null>(null);
   const [filter, setFilter] = useState("All work");
   const [sortBy, setSortBy] = useState<"manual" | "urgency" | "deadline">("manual");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [stepSortBy, setStepSortBy] = useState<"urgency" | "deadline">("urgency");
+  const [stepSortDirection, setStepSortDirection] = useState<"asc" | "desc">("asc");
   const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -241,7 +241,7 @@ export default function Home() {
   const [tagDraft, setTagDraft] = useState("");
   const [linkDraft, setLinkDraft] = useState("");
   const [dependencyPickerOpen, setDependencyPickerOpen] = useState(false);
-  const [currentView, setCurrentView] = useState<View>("journeys");
+  const [currentView, setCurrentView] = useState<View>("backlog");
   const [tagLibrary, setTagLibrary] = useState<Record<string, string>>(defaultTagColors);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#668d74");
@@ -254,15 +254,9 @@ export default function Home() {
   const [saveError, setSaveError] = useState("");
   const [serverReady, setServerReady] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => { const today = new Date(); return new Date(today.getFullYear(), today.getMonth(), 1); });
-  const [aiState, setAiState] = useState<"idle" | "loading" | "ready" | "unavailable">("idle");
-  const [aiSummary, setAiSummary] = useState("");
-  const [aiRefresh, setAiRefresh] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
-  const [aiQuestion, setAiQuestion] = useState("");
-  const [aiAnswer, setAiAnswer] = useState("");
-  const [aiQuestionState, setAiQuestionState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [formError, setFormError] = useState("");
   const [clock, setClock] = useState(() => new Date());
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -437,36 +431,6 @@ export default function Home() {
       .catch(() => setUploads([]));
   }, [currentView, settingsTab]);
 
-  useEffect(() => {
-    if (!ready || !serverReady) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setAiState("loading");
-      try {
-        const response = await fetch("/api/ai-summary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ data: { version: 1, tasks, tagLibrary, workspaces } }),
-          signal: controller.signal,
-        });
-        if (response.status === 404) {
-          setAiState("unavailable");
-          return;
-        }
-        if (!response.ok) throw new Error(`Local AI returned ${response.status}`);
-        const payload = await response.json() as { summary?: unknown; memo?: unknown; data?: { summary?: unknown } };
-        const summary = typeof payload.summary === "string" ? payload.summary : typeof payload.memo === "string" ? payload.memo : typeof payload.data?.summary === "string" ? payload.data.summary : "";
-        if (!summary.trim()) throw new Error("Local AI returned no summary");
-        setAiSummary(summary);
-        setAiState("ready");
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") return;
-        setAiState("unavailable");
-      }
-    }, 350);
-    return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [tasks, tagLibrary, workspaces, ready, serverReady, aiRefresh]);
-
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
     const searchable = [task.title, task.project, task.tags.join(" "), ...task.steps.flatMap((step) => [step.label, step.note, step.people ?? "", step.owner ?? "", step.deadline])].join(" ");
@@ -477,12 +441,16 @@ export default function Home() {
     if (sortBy === "manual") return filtered;
     const urgencyRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
     return [...filtered].sort((a, b) => {
-      if (sortBy === "urgency") return urgencyRank[a.priority] - urgencyRank[b.priority] || a.title.localeCompare(b.title);
+      if (sortBy === "urgency") {
+        const result = urgencyRank[a.priority] - urgencyRank[b.priority] || a.title.localeCompare(b.title);
+        return sortDirection === "asc" ? result : -result;
+      }
       const aDeadline = Math.min(...a.steps.map((step) => parseDateKey(normalizeDeadline(step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER));
       const bDeadline = Math.min(...b.steps.map((step) => parseDateKey(normalizeDeadline(step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER));
-      return aDeadline - bDeadline || a.title.localeCompare(b.title);
+      const result = aDeadline - bDeadline || a.title.localeCompare(b.title);
+      return sortDirection === "asc" ? result : -result;
     });
-  }, [tasks, filter, query, activeWorkspace, sortBy]);
+  }, [tasks, filter, query, activeWorkspace, sortBy, sortDirection]);
 
   const selectedTask = selected ? tasks.find((task) => task.id === selected.taskId) : undefined;
   const selectedStep = selectedTask?.steps.find((step) => step.id === selected?.stepId);
@@ -490,13 +458,14 @@ export default function Home() {
   const openSteps = useMemo(() => tasks.flatMap((task) => task.steps.filter((step) => step.status !== "done").map((step) => ({ task, step }))), [tasks]);
   const sortedOpenSteps = useMemo(() => [...openSteps].sort((a, b) => {
     const rank: Record<Status, number> = { blocked: 0, "in-progress": 1, todo: 2, done: 3 };
-    const statusDifference = rank[a.step.status] - rank[b.step.status];
-    if (statusDifference !== 0) return statusDifference;
     const aDate = parseDateKey(normalizeDeadline(a.step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER;
     const bDate = parseDateKey(normalizeDeadline(b.step.deadline))?.getTime() ?? Number.MAX_SAFE_INTEGER;
-    return aDate - bDate || a.task.title.localeCompare(b.task.title);
-  }), [openSteps]);
+    const statusDifference = rank[a.step.status] - rank[b.step.status];
+    const result = stepSortBy === "urgency" ? statusDifference || aDate - bDate || a.task.title.localeCompare(b.task.title) : aDate - bDate || statusDifference || a.task.title.localeCompare(b.task.title);
+    return stepSortDirection === "asc" ? result : -result;
+  }), [openSteps, stepSortBy, stepSortDirection]);
   const blockedSteps = openSteps.filter(({ step }) => step.status === "blocked");
+  const urgentSteps = sortedOpenSteps.slice(0, 5);
   const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
   const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
@@ -508,11 +477,6 @@ export default function Home() {
   const closestDeadlineDays = closestStep ? Math.max(0, Math.ceil((closestStep.date.getTime() - new Date(clock.getFullYear(), clock.getMonth(), clock.getDate()).getTime()) / 86_400_000)) : null;
   const allSteps = tasks.flatMap((task) => task.steps);
   const weeklyProgress = allSteps.length === 0 ? 0 : Math.round((allSteps.filter((step) => step.status === "done").length / allSteps.length) * 100);
-  const focusRecommendation = blockedSteps.length > 0
-    ? `Start here: unblock “${blockedSteps[0].step.label}” in ${blockedSteps[0].task.title.toLowerCase()}, then move the next open step forward.`
-    : openSteps.length > 0
-      ? `Start here: move “${openSteps[0].step.label}” in ${openSteps[0].task.title.toLowerCase()} forward. Keep the next deadline visible.`
-      : "Everything is complete. Take a moment to choose what matters next.";
   const todayKey = dateKey(new Date());
   const calendarDates = useMemo(() => {
     const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
@@ -528,7 +492,7 @@ export default function Home() {
   function navigateTo(view: View) {
     setCurrentView(view);
     const base = window.location.pathname.startsWith("/kairos") ? "/kairos" : "";
-    const suffix = view === "journeys" ? "" : `/${view}`;
+    const suffix = view === "journeys" ? "/work" : view === "backlog" ? "" : `/${view}`;
     window.history.pushState({}, "", `${base}${suffix || "/"}`);
   }
 
@@ -798,34 +762,20 @@ export default function Home() {
     } catch (error) { window.alert(error instanceof Error ? error.message : "The file could not be deleted."); }
   }
 
-  async function askAi() {
-    const question = aiQuestion.trim();
-    if (!question) return;
-    setAiQuestionState("loading");
-    setAiAnswer("");
-    try {
-      const response = await fetch("/api/ai-summary", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ question, data: { version: 1, tasks, tagLibrary, workspaces } }) });
-      if (!response.ok) throw new Error("Kairos AI is unavailable.");
-      const payload = await response.json() as { memo?: string };
-      setAiAnswer(payload.memo ?? "No answer returned.");
-      setAiQuestionState("ready");
-    } catch (error) { setAiAnswer(error instanceof Error ? error.message : "Kairos AI is unavailable."); setAiQuestionState("error"); }
-  }
-
   if (!ready) {
-    return <main className="app-shell"><section className="workspace"><div className="empty" role="status"><span>⌁</span><h3>Loading Kairos…</h3><p>Reading your saved journeys.</p></div></section></main>;
+    return <main className="app-shell"><section className="workspace"><div className="empty" role="status"><span>⌁</span><h3>Loading Kairos…</h3><p>Reading your saved workstreams.</p></div></section></main>;
   }
 
   return (
     <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span><span className="brand-orbit" aria-hidden="true"/><small>Track what matters</small></div></div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span><span className="brand-orbit" aria-hidden="true"/></div></div>
         <button className="collapse-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? "›" : "‹"}</button>
         <nav aria-label="Primary navigation">
-          <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Journeys" onClick={() => navigateTo("journeys")}><span>⌁</span><span className="nav-text">Journeys</span></button>
+          <button className={`nav-item ${currentView === "backlog" ? "active" : ""}`} title="Start" onClick={() => navigateTo("backlog")}><span>＋</span><span className="nav-text">Start</span><b>{tasks.filter((task) => task.backlog).length}</b></button>
+          <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Workstreams" onClick={() => navigateTo("journeys")}><span>⌁</span><span className="nav-text">Workstreams</span></button>
           <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My steps" onClick={() => { navigateTo("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My steps</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
           <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { navigateTo("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
-          <button className={`nav-item ${currentView === "backlog" ? "active" : ""}`} title="Backlog" onClick={() => { navigateTo("backlog"); setSelected(null); setEditTaskId(null); }}><span>≡</span><span className="nav-text">Backlog</span><b>{tasks.filter((task) => task.backlog).length}</b></button>
           <button className={`nav-item ${currentView === "settings" ? "active" : ""}`} title="Settings" onClick={() => { navigateTo("settings"); setSelected(null); setEditTaskId(null); }}><span>⚙</span><span className="nav-text">Settings</span></button>
         </nav>
         <div className="nav-label">Workspace</div>
@@ -838,7 +788,7 @@ export default function Home() {
 
       <section className="workspace">
         <header className="topbar">
-          <div className="topbar-intro">{currentView === "journeys" && <><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p><h1>{greeting}, Christian.</h1><p className="topbar-sub">Three journeys need your attention today.</p></>}</div>
+          <div className="topbar-intro"><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p>{currentView === "backlog" && <><h1>Start, Christian.</h1><p className="topbar-sub">Capture what matters now. Shape the work when you are ready.</p></>}{currentView === "journeys" && <><h1>{greeting}, Christian.</h1><p className="topbar-sub">Your workstreams, milestones, and next steps in one view.</p></>}</div>
           <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
@@ -870,9 +820,9 @@ export default function Home() {
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Move it forward later.</h2><p>Capture a task now. Add its workspace and steps when you have the shape of the work.</p><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="What needs doing?" aria-label="Quick task name"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form></div>
-          <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open journeys</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>)}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open journeys.</p>}</section>
-            <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Journeys.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
+          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Kairos</h2><p>Capture a task now. Shape the work with steps and a workspace when you are ready.</p><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="What needs doing?" aria-label="Quick task name"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form></div>
+          <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
+            <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
         </section> : currentView === "calendar" ? <section className="calendar-page">
           <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active journey, organized by deadline.</p></div><div className="calendar-actions"><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
@@ -880,20 +830,20 @@ export default function Home() {
           <div className="calendar-grid">{calendarDates.map((date) => { const key = dateKey(date); const inMonth = date.getMonth() === calendarMonth.getMonth() && date.getFullYear() === calendarMonth.getFullYear(); const events = tasks.flatMap((task) => task.steps.filter((step) => normalizeDeadline(step.deadline) === key).map((step) => ({ task, step }))); return <div key={key} className={`calendar-day ${inMonth ? "" : "outside"} ${key === todayKey ? "today-cell" : ""}`}><span>{date.getDate()}</span>{events.map(({ task, step }) => <button key={`${task.id}-${step.id}`} className="calendar-event" style={{ borderLeftColor: workspaces[task.project]?.color ?? "#91a09a", background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}><i style={{ background: workspaces[task.project]?.color ?? "#91a09a" }}/><strong>{step.label}</strong><small>{task.title}</small></button>)}</div>; })}</div>
           <div className="calendar-legend">{Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <span key={name}><i style={{ background: info.color }}/>{name}</span>)}</div>
         </section> : currentView === "my-tasks" ? <section className="my-tasks-page">
-          <div className="view-title"><div><p className="eyebrow">YOUR NEXT ACTIONS</p><h2>My tasks</h2><p>Individual steps assigned to you across every journey.</p></div><span>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length} open</span></div>
+          <div className="view-title"><div><p className="eyebrow">YOUR NEXT ACTIONS</p><h2>My steps</h2><p>Individual steps assigned to you across every workstream.</p></div><div className="view-title-actions"><label className="sort-control"><span>Sort by</span><select value={stepSortBy} onChange={(e) => setStepSortBy(e.target.value as typeof stepSortBy)}><option value="urgency">Urgency</option><option value="deadline">Deadline</option></select><button className="sort-direction" onClick={() => setStepSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${stepSortDirection === "asc" ? "descending" : "ascending"}`}>{stepSortDirection === "asc" ? "↑" : "↓"}</button></label><span>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length} open</span></div></div>
           <div className="action-list">{sortedOpenSteps.map(({ task, step }) => <article key={`${task.id}-${step.id}`}><button className={`action-check ${step.status}`} aria-label={`${statusLabel[step.status]}. Change status`} title="Change status" onClick={() => setStepStatus(task.id, step.id, step.status === "blocked" ? "in-progress" : step.status === "in-progress" ? "done" : "in-progress")}>{step.status === "blocked" ? "!" : step.status === "in-progress" ? "·" : ""}</button><div><h3>{step.label}</h3><p>{task.title}</p></div><span className="workspace-chip" style={{ color: workspaces[task.project]?.color, background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span><time>{formatDeadline(step.deadline)}</time><button className="open-action" onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}>Open</button></article>)}</div>
-          {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open tasks</h3><p>Every step is done. Add a new journey to keep moving.</p></div>}
+          {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open steps</h3><p>Every step is done. Capture the next thing to move.</p></div>}
         </section> : <>
         <section className="overview">
-          <div className="ai-focus"><span><b>✦</b> LOCAL AI MEMO {aiState === "loading" ? "· UPDATING" : aiState === "unavailable" ? "· FALLBACK" : ""}</span><strong>Focus your attention</strong>{aiState === "ready" ? <div className="ai-memo">{memoLines(aiSummary).map((line, index) => { const formatted = memoParts(line); return <p className={formatted.heading ? "memo-heading" : ""} key={`${line}-${index}`}>{formatted.bullet && <span className="memo-bullet">•</span>}{formatted.parts.map((part, partIndex) => part.startsWith("**") && part.endsWith("**") ? <strong key={partIndex}>{part.slice(2, -2)}</strong> : part)}</p>; })}</div> : <p>{focusRecommendation}</p>}<form className="ai-ask" onSubmit={(event) => { event.preventDefault(); askAi(); }}><input value={aiQuestion} onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about your journeys…" aria-label="Ask Kairos AI"/><button className="save-btn" type="submit" disabled={aiQuestionState === "loading"}>{aiQuestionState === "loading" ? "Thinking…" : "Ask"}</button></form>{aiAnswer && <div className={`ai-answer ${aiQuestionState}`} aria-live="polite">{memoLines(aiAnswer).map((line, index) => { const formatted = memoParts(line); return <p className={formatted.heading ? "memo-heading" : ""} key={`${line}-${index}`}>{formatted.bullet && <span className="memo-bullet">•</span>}{formatted.parts.map((part, partIndex) => part.startsWith("**") && part.endsWith("**") ? <strong key={partIndex}>{part.slice(2, -2)}</strong> : part)}</p>; })}</div>}{aiState !== "loading" && <button className="ai-refresh" onClick={() => setAiRefresh((value) => value + 1)}>↻ Refresh</button>}</div>
+          <div className="urgent-focus"><span><b>✦</b> NEXT STEPS</span><strong>Five steps worth moving</strong><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div>{urgentSteps.length === 0 && <p>Everything is complete. Capture the next thing to move.</p>}</div>
           <div className="overview-metrics"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> in {closestDeadlineDays} {closestDeadlineDays === 1 ? "day" : "days"}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div><div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
 
         <div className="content-head">
-          <div><h2>{activeWorkspace ? "Tasks in this workspace" : "Task journeys"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
-          <div className="content-controls"><label className="sort-control"><span>Sort by</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} aria-label="Sort journeys"><option value="manual">Default order</option><option value="urgency">Urgency</option><option value="deadline">Deadline date</option></select></label><div className="filters">
+          <div><h2>{activeWorkspace ? "Work in this workspace" : "Workstreams"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
+          <div className="content-controls"><label className="sort-control"><span>Sort by</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} aria-label="Sort workstreams"><option value="manual">Default order</option><option value="urgency">Urgency</option><option value="deadline">Deadline date</option></select><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters">
             {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
           </div></div>
         </div>
@@ -923,7 +873,7 @@ export default function Home() {
               <div className="completion"><strong>{progress(task)}%</strong><span>complete</span></div>
             </article>
           ))}
-          {visibleTasks.length === 0 && <div className="empty"><span>⌁</span><h3>No journeys found</h3><p>Try another filter or search term.</p></div>}
+          {visibleTasks.length === 0 && <div className="empty"><span>⌁</span><h3>No workstreams found</h3><p>Try another filter or search term.</p></div>}
         </div>
         </>}
       </section>
@@ -937,7 +887,7 @@ export default function Home() {
             <label className="field-label" htmlFor="task-name">Task name</label>
             <textarea id="task-name" className="task-name-input" value={taskToEdit.title} onChange={(e) => updateTask(taskToEdit.id, { title: e.target.value })} />
             <div className="two-cols"><div><label className="field-label" htmlFor="task-workspace">Workspace / project</label><select id="task-workspace" value={taskToEdit.project} onChange={(e) => updateTask(taskToEdit.id, { project: e.target.value })}>{taskToEdit.backlog && <option value="Backlog">Backlog</option>}{Object.entries(workspaces).filter(([name, info]) => info.active || taskToEdit.project === name).map(([name]) => <option key={name}>{name}</option>)}</select></div><div><label className="field-label" htmlFor="task-priority">Priority</label><select id="task-priority" value={taskToEdit.priority} onChange={(e) => updateTask(taskToEdit.id, { priority: e.target.value as Priority })}><option>High</option><option>Medium</option><option>Low</option></select></div></div>
-            {taskToEdit.backlog && <div className="backlog-panel-callout"><strong>Quick task</strong><span>Add at least one step and choose a workspace, then Done will move it into Journeys.</span><button className="save-btn" onClick={() => addStep(taskToEdit.id)}>＋ Add step</button></div>}
+            {taskToEdit.backlog && <div className="backlog-panel-callout"><strong>Quick task</strong><span>Add at least one step and choose a workspace, then Done will move it into Workstreams.</span><button className="save-btn" onClick={() => addStep(taskToEdit.id)}>＋ Add step</button></div>}
             <p className="field-label">Tags</p>
             <div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div>
             <div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div>
@@ -979,7 +929,7 @@ export default function Home() {
         </aside>
       )}
 
-      {showNew && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-heading"><button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close modal">×</button><span className="eyebrow">START A JOURNEY</span><h2 id="new-task-heading">What are you moving forward?</h2><p>Create the task now. You can shape its steps as you go.</p><label htmlFor="new-task-title">Task name<input ref={newTitleRef} id="new-task-title" value={newTitle} onChange={(e) => { setNewTitle(e.target.value); setFormError(""); }} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="e.g. Plan customer workshop" /></label><label htmlFor="new-task-workspace">Workspace<select id="new-task-workspace" value={newWorkspace} onChange={(e) => setNewWorkspace(e.target.value)}>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="modal-actions"><button className="save-btn" onClick={() => setShowNew(false)}>Cancel</button><button className="save-btn" onClick={addTask}>Create journey</button></div></div></div>}
+      {showNew && <div className="modal-backdrop"><div className="modal" role="dialog" aria-modal="true" aria-labelledby="new-task-heading"><button className="modal-close" onClick={() => setShowNew(false)} aria-label="Close modal">×</button><span className="eyebrow">START A WORKSTREAM</span><h2 id="new-task-heading">What are you moving forward?</h2><p>Create the task now. You can shape its steps as you go.</p><label htmlFor="new-task-title">Task name<input ref={newTitleRef} id="new-task-title" value={newTitle} onChange={(e) => { setNewTitle(e.target.value); setFormError(""); }} onKeyDown={(e) => e.key === "Enter" && addTask()} placeholder="e.g. Plan customer workshop" /></label><label htmlFor="new-task-workspace">Workspace<select id="new-task-workspace" value={newWorkspace} onChange={(e) => setNewWorkspace(e.target.value)}>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name} value={name}>{name}</option>)}</select></label>{formError && <p className="form-error" role="alert">{formError}</p>}<div className="modal-actions"><button className="save-btn" onClick={() => setShowNew(false)}>Cancel</button><button className="save-btn" onClick={addTask}>Create workstream</button></div></div></div>}
     </main>
   );
 }
