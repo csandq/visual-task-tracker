@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Dropdown } from "@/components/interior/dropdown";
+import { ExpandingSearch } from "@/components/interior/expanding-search";
+import { FloatingLabelInput } from "@/components/interior/floating-label";
 
 type Status = "done" | "in-progress" | "blocked" | "todo";
 type Priority = "High" | "Medium" | "Low";
@@ -236,6 +239,7 @@ export default function Home() {
   const [filter, setFilter] = useState("All work");
   const [sortBy, setSortBy] = useState<"manual" | "urgency" | "deadline">("manual");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [searchQuery, setSearchQuery] = useState("");
   const [stepSortBy, setStepSortBy] = useState<"urgency" | "deadline">("urgency");
   const [stepSortDirection, setStepSortDirection] = useState<"asc" | "desc">("asc");
   const [showNew, setShowNew] = useState(false);
@@ -245,7 +249,7 @@ export default function Home() {
   const [dragged, setDragged] = useState<number | null>(null);
   const [collapsedTasks, setCollapsedTasks] = useState<number[]>(() => seedTasks.map((task) => task.id));
   const [ready, setReady] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
   const [editTaskId, setEditTaskId] = useState<number | null>(null);
   const [tagDraft, setTagDraft] = useState("");
@@ -448,7 +452,7 @@ export default function Home() {
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
     const matchesFilter = filter === "All work" || (filter === "In progress" && task.steps.some((s) => s.status === "in-progress")) || (filter === "Blocked" && task.steps.some((s) => s.status === "blocked")) || task.priority === filter;
-    return matchesFilter && (!activeWorkspace || task.project === activeWorkspace);
+    return matchesFilter && (!activeWorkspace || task.project === activeWorkspace) && (!searchQuery.trim() || `${task.title} ${task.project} ${task.tags.join(" ")}`.toLowerCase().includes(searchQuery.trim().toLowerCase()));
     });
     if (sortBy === "manual") return filtered;
     const urgencyRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
@@ -462,7 +466,7 @@ export default function Home() {
       const result = aDeadline - bDeadline || a.title.localeCompare(b.title);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [tasks, filter, activeWorkspace, sortBy, sortDirection]);
+  }, [tasks, filter, activeWorkspace, sortBy, sortDirection, searchQuery]);
 
   const selectedTask = selected ? tasks.find((task) => task.id === selected.taskId) : undefined;
   const selectedStep = selectedTask?.steps.find((step) => step.id === selected?.stepId);
@@ -489,6 +493,22 @@ export default function Home() {
   const closestDeadlineDays = closestStep ? Math.max(0, Math.ceil((closestStep.date.getTime() - new Date(clock.getFullYear(), clock.getMonth(), clock.getDate()).getTime()) / 86_400_000)) : null;
   const allSteps = tasks.flatMap((task) => task.steps);
   const weeklyProgress = allSteps.length === 0 ? 0 : Math.round((allSteps.filter((step) => step.status === "done").length / allSteps.length) * 100);
+  const completionHistory = useMemo(() => {
+    const today = new Date(clock.getFullYear(), clock.getMonth(), clock.getDate());
+    const days = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (13 - index));
+      return { date, key: dateKey(date), count: 0 };
+    });
+    const counts = new Map(days.map((day) => [day.key, 0]));
+    tasks.forEach((task) => task.steps.forEach((step) => (step.activity ?? []).forEach((entry) => {
+      if (entry.status === "done") {
+        const key = dateKey(new Date(entry.timestamp));
+        if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    })));
+    return days.map((day) => ({ ...day, count: counts.get(day.key) ?? 0 }));
+  }, [tasks, clock]);
+  const completionMax = Math.max(1, ...completionHistory.map((day) => day.count));
   const todayKey = dateKey(new Date());
   const calendarDates = useMemo(() => {
     const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
@@ -581,6 +601,9 @@ export default function Home() {
   }
 
   function openNewTask() {
+    setDetailsFullscreen(false);
+    setEditTaskId(null);
+    setSelected(null);
     const firstWorkspace = Object.entries(workspaces).find(([, info]) => info.active)?.[0] ?? Object.keys(workspaces)[0] ?? "";
     setNewWorkspace(activeWorkspace ?? firstWorkspace);
     setFormError("");
@@ -618,6 +641,9 @@ export default function Home() {
   }
 
   function addBacklogTask() {
+    setDetailsFullscreen(false);
+    setEditTaskId(null);
+    setSelected(null);
     const title = quickTitle.trim();
     if (!title) {
       setFormError("Write a task before adding it.");
@@ -636,6 +662,7 @@ export default function Home() {
       recordActivity("moved", "journey", `Moved “${task.title}” from the backlog into journeys.`);
     }
     setEditTaskId(null);
+    setDetailsFullscreen(false);
   }
 
   function deleteTask(taskId: number) {
@@ -802,7 +829,7 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div className="topbar-intro"><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p>{currentView === "backlog" && <h1>Welcome, Christian.</h1>}{currentView === "journeys" && <><h1>{greeting}, Christian.</h1><p className="topbar-sub">Your workstreams, milestones, and next steps in one view.</p></>}</div>
-          <div className="top-actions"><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
+          <div className="top-actions">{currentView === "journeys" && <ExpandingSearch value={searchQuery} onChange={setSearchQuery} onSubmit={setSearchQuery} placeholder="Search workstreams" />}<div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <span className="t-badge" data-open={notificationsOpen ? "true" : "false"}><span className="t-badge-dot">{visibleNotifications.length}</span></span>}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
@@ -833,12 +860,12 @@ export default function Home() {
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input className={formError ? "input-error" : ""} value={quickTitle} onChange={(event) => { setQuickTitle(event.target.value); setFormError(""); }} placeholder="What needs doing?" aria-label="Quick task name" aria-invalid={Boolean(formError)}/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
+          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><FloatingLabelInput label="What needs doing?" value={quickTitle} onChange={(value) => { setQuickTitle(value); setFormError(""); }} id="kairos-capture" name="kairos-capture" autoComplete="new-password" /><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
           <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
             <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
         </section> : currentView === "calendar" ? <section className="calendar-page">
-          <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active journey, organized by deadline.</p></div><div className="calendar-actions"><label className="calendar-workspace-filter"><span>Workspace</span><select value={calendarWorkspace} onChange={(event) => setCalendarWorkspace(event.target.value)}><option>All workspaces</option>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name}>{name}</option>)}</select></label><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
+          <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active workstream, organized by deadline.</p></div><div className="calendar-actions"><label className="calendar-workspace-filter"><span>Workspace</span><select value={calendarWorkspace} onChange={(event) => setCalendarWorkspace(event.target.value)}><option>All workspaces</option>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name}>{name}</option>)}</select></label><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
           <div className="calendar-weekdays">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day) => <span key={day}>{day}</span>)}</div>
           <div className="calendar-grid">{calendarDates.map((date) => { const key = dateKey(date); const inMonth = date.getMonth() === calendarMonth.getMonth() && date.getFullYear() === calendarMonth.getFullYear(); const events = tasks.flatMap((task) => task.steps.filter((step) => normalizeDeadline(step.deadline) === key && (calendarWorkspace === "All workspaces" || task.project === calendarWorkspace)).map((step) => ({ task, step }))); return <div key={key} className={`calendar-day ${inMonth ? "" : "outside"} ${key === todayKey ? "today-cell" : ""}`}><span>{date.getDate()}</span>{events.map(({ task, step }) => <button key={`${task.id}-${step.id}`} className="calendar-event" style={{ borderLeftColor: workspaces[task.project]?.color ?? "#91a09a", background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}><i style={{ background: workspaces[task.project]?.color ?? "#91a09a" }}/><strong>{step.label}</strong><small>{task.title}</small></button>)}</div>; })}</div>
           <div className="calendar-legend">{Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <span key={name}><i style={{ background: info.color }}/>{name}</span>)}</div>
@@ -849,14 +876,15 @@ export default function Home() {
         </section> : <>
         <section className="overview">
           <div className="urgent-focus"><span>NEXT STEPS</span><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div></div>
-          <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
+          <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div><svg className="completion-line" viewBox="0 0 280 72" role="img" aria-label="Steps completed per day over the last 14 days" preserveAspectRatio="none"><polyline points={completionHistory.map((day, index) => `${(index / 13) * 280},${68 - (day.count / completionMax) * 56}`).join(" ")} /><g>{completionHistory.map((day, index) => <circle key={day.key} cx={(index / 13) * 280} cy={68 - (day.count / completionMax) * 56} r="2.2" />)}</g></svg></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
 
         <div className="content-head">
           <div><h2>{activeWorkspace ? "Work in this workspace" : "Workstreams"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
-          <div className="content-controls"><label className="sort-control"><span>Sort by</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} aria-label="Sort workstreams"><option value="manual">Default order</option><option value="urgency">Urgency</option><option value="deadline">Deadline date</option></select><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters">
+          <div className="content-controls"><label className="sort-control"><span>Sort by</span><Dropdown label="Sort workstreams" value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} items={[{ value: "manual", label: "Default order" }, { value: "urgency", label: "Urgency" }, { value: "deadline", label: "Deadline date" }]} /><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters t-tabs">
+            <span className="t-tabs-pill" aria-hidden="true" />
             {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
           </div></div>
         </div>
@@ -895,19 +923,14 @@ export default function Home() {
 
       {taskToEdit && (
         <aside className={`detail-panel task-editor ${detailsFullscreen ? "details-fullscreen" : ""}`}>
-          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setEditTaskId(null); setDetailsFullscreen(false); }} aria-label="Close task details">×</button></div></div>
+          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><div className="panel-head-actions"><button className="save-btn panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setEditTaskId(null); setDetailsFullscreen(false); }} aria-label="Close task details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="task-name">Task name</label>
             <input id="task-name" className="title-input task-name-input" value={taskToEdit.title} onChange={(e) => updateTask(taskToEdit.id, { title: e.target.value })} />
             <div className="two-cols"><div><label className="field-label" htmlFor="task-workspace">Workspace / project</label><select id="task-workspace" value={taskToEdit.project} onChange={(e) => updateTask(taskToEdit.id, { project: e.target.value })}>{taskToEdit.backlog && <option value="Backlog">Backlog</option>}{Object.entries(workspaces).filter(([name, info]) => info.active || taskToEdit.project === name).map(([name]) => <option key={name}>{name}</option>)}</select></div><div><label className="field-label" htmlFor="task-priority">Priority</label><select id="task-priority" value={taskToEdit.priority} onChange={(e) => updateTask(taskToEdit.id, { priority: e.target.value as Priority })}><option>High</option><option>Medium</option><option>Low</option></select></div></div>
             {taskToEdit.backlog && <div className="backlog-panel-callout"><strong>Quick task</strong><span>Add at least one step and choose a workspace, then Done will move it into Workstreams.</span><button className="save-btn" onClick={() => addStep(taskToEdit.id)}>＋ Add step</button></div>}
-            <p className="field-label">Tags</p>
-            <div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div>
-            <div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div>
-            <div className="tag-suggestions">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).slice(0, 5).map((tag) => <button key={tag} onClick={() => addTagToTask(taskToEdit, tag)}><i style={{ background: tagLibrary[tag] }}/>{tag}</button>)}</div>
-            <p className="field-label">Reference links</p>
-            <div className="link-list">{(taskToEdit.links ?? []).map((link) => <div key={link}><a href={link} target="_blank" rel="noreferrer">↗ {link.replace(/^https?:\/\//, "")}</a><button onClick={() => updateTask(taskToEdit.id, { links: (taskToEdit.links ?? []).filter((item) => item !== link) })}>×</button></div>)}</div>
-            <div className="inline-add"><input value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="Paste a link" aria-label="Reference link"/><button onClick={() => { const value = normalizeLink(linkDraft); if (!value) { setFormError("Enter a valid http or https link."); return; } updateTask(taskToEdit.id, { links: [...(taskToEdit.links ?? []), value] }); setLinkDraft(""); setFormError(""); }}>Add</button></div>
+            <div className="task-steps-list"><p className="field-label">Steps</p><ol>{taskToEdit.steps.map((step) => <li key={step.id} className={step.status}><span>{step.label}</span><small>{statusLabel[step.status]}</small></li>)}</ol></div>
+            <div className="task-metadata-pair"><div><p className="field-label">Tags</p><div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div><div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div></div><div><p className="field-label">Reference links</p><div className="link-list">{(taskToEdit.links ?? []).map((link) => <div key={link}><a href={link} target="_blank" rel="noreferrer">↗ {link.replace(/^https?:\/\//, "")}</a><button onClick={() => updateTask(taskToEdit.id, { links: (taskToEdit.links ?? []).filter((item) => item !== link) })}>×</button></div>)}</div><div className="inline-add"><input value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="Paste a link" aria-label="Reference link"/><button onClick={() => { const value = normalizeLink(linkDraft); if (!value) { setFormError("Enter a valid http or https link."); return; } updateTask(taskToEdit.id, { links: [...(taskToEdit.links ?? []), value] }); setLinkDraft(""); setFormError(""); }}>Add</button></div></div></div>
             {formError && <p className="form-error" role="alert">{formError}</p>}
             <p className="field-label">Dependencies</p>
             <p className="field-help">Choose a task that must move first.</p>
@@ -917,13 +940,13 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{taskToEdit.backlog ? <span>Not in Journeys yet</span> : <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
+          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{!taskToEdit.backlog && <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
         </aside>
       )}
 
       {!taskToEdit && selectedStep && selectedTask && (
         <aside className={`detail-panel ${detailsFullscreen ? "details-fullscreen" : ""}`}>
-          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details">×</button></div></div>
+          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><div className="panel-head-actions"><button className="save-btn panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="step-name">Step name</label>
             <input id="step-name" className="title-input" value={selectedStep.label} onChange={(e) => updateStep({ label: e.target.value })} />
@@ -938,7 +961,7 @@ export default function Home() {
             <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment.name}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) uploadAttachment(file); e.currentTarget.value = ""; }} /></label>{selectedStep.attachment && <a className="attachment-download" href={`/api/attachments/${encodeURIComponent(selectedStep.attachment.id)}`} target="_blank" rel="noreferrer">Open</a>}</div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
-          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setSelected(null); }}>Done</button></div>
+          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>Done</button></div>
         </aside>
       )}
 
