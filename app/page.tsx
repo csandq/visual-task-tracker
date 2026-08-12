@@ -106,10 +106,8 @@ function isoWeekNumber(date: Date) {
   return Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
 }
 
-const weekDayLabels = ["M", "T", "W", "T", "F", "S", "S"];
-
 function StatusLoadingState() {
-  return <div className="status-loader"><strong>Status</strong><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span></div>;
+  return <div className="status-loader"><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span><strong>Status</strong></div>;
 }
 
 function parseDateKey(value: string) {
@@ -418,6 +416,7 @@ export default function Home() {
       setNotificationsOpen(false);
       setDependencyPickerOpen(false);
       setShowNew(false);
+      setDetailsFullscreen(false);
       setEditTaskId(null);
       setSelected(null);
     }
@@ -478,6 +477,7 @@ export default function Home() {
     return stepSortDirection === "asc" ? result : -result;
   }), [openSteps, stepSortBy, stepSortDirection]);
   const blockedSteps = openSteps.filter(({ step }) => step.status === "blocked");
+  const urgentSteps = sortedOpenSteps.slice(0, 5);
   const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
   const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
@@ -489,9 +489,6 @@ export default function Home() {
   const closestDeadlineDays = closestStep ? Math.max(0, Math.ceil((closestStep.date.getTime() - new Date(clock.getFullYear(), clock.getMonth(), clock.getDate()).getTime()) / 86_400_000)) : null;
   const allSteps = tasks.flatMap((task) => task.steps);
   const weeklyProgress = allSteps.length === 0 ? 0 : Math.round((allSteps.filter((step) => step.status === "done").length / allSteps.length) * 100);
-  const weekStart = new Date(clock.getFullYear(), clock.getMonth(), clock.getDate() - ((clock.getDay() + 6) % 7));
-  const weeklyDayCounts = weekDayLabels.map((_, dayIndex) => allSteps.reduce((count, step) => count + (step.activity ?? []).filter((entry) => entry.status === "done" && (() => { const date = new Date(entry.timestamp); return date.getDay() === (dayIndex + 1) % 7 && date >= weekStart; })()).length, 0));
-  const weeklyDayMax = Math.max(1, ...weeklyDayCounts);
   const todayKey = dateKey(new Date());
   const calendarDates = useMemo(() => {
     const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
@@ -800,9 +797,6 @@ export default function Home() {
         <div className="nav-label">Workspace</div>
         <button className={`nav-item workspace-nav ${activeWorkspace === null ? "active" : ""}`} title="All workspaces" onClick={() => { setActiveWorkspace(null); navigateTo("journeys"); }}><span className="all-workspaces-mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.3" stroke="currentColor" strokeWidth="1.2"/><circle cx="8" cy="8" r="1.7" fill="currentColor"/></svg></span><span className="nav-text">All workspaces</span><b>{tasks.length}</b></button>
         {Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <button key={name} className={`nav-item workspace-nav ${activeWorkspace === name ? "active" : ""}`} title={name} onClick={() => { setActiveWorkspace(name); navigateTo("journeys"); }}><span className="project-dot" style={{ background: info.color }} /><span className="nav-text">{name}</span><b>{tasks.filter((task) => task.project === name).length}</b></button>)}
-        <div className="sidebar-footer">
-          <div className="avatar">CH</div><div className="profile-copy"><strong>Christian</strong><span>Personal workspace</span></div>
-        </div>
       </aside>
 
       <section className="workspace">
@@ -854,8 +848,8 @@ export default function Home() {
           {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open steps</h3><p>Every step is done. Capture the next thing to move.</p></div>}
         </section> : <>
         <section className="overview">
-          <div className="urgent-focus"><span>NEXT STEPS</span></div>
-          <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div><div className="weekly-days" aria-label="Completed steps by weekday">{weekDayLabels.map((label, index) => <div key={`${label}-${index}`}><span>{label}</span><i style={{ height: `${Math.max(12, (weeklyDayCounts[index] / weeklyDayMax) * 100)}%` }} /><b>{weeklyDayCounts[index]}</b></div>)}</div></div></div>
+          <div className="urgent-focus"><span>NEXT STEPS</span><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div></div>
+          <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
@@ -872,7 +866,7 @@ export default function Home() {
             <article className={`task-card ${selectedTask?.id === task.id ? "selected" : ""} ${collapsedTasks.includes(task.id) ? "is-collapsed" : ""}`} key={task.id} draggable onDragStart={() => setDragged(task.id)} onDragOver={(e) => { e.preventDefault(); reorder(task.id); }} onDragEnd={() => setDragged(null)}>
               <button className="drag" aria-label={`Drag ${task.title}`}>⠿</button>
               <button className="journey-collapse-toggle" aria-label={`${collapsedTasks.includes(task.id) ? "Expand" : "Collapse"} ${task.title}`} aria-expanded={!collapsedTasks.includes(task.id)} onClick={() => toggleTaskCollapsed(task.id)}>{collapsedTasks.includes(task.id) ? "›" : "⌄"}</button>
-              <button className="task-meta" onClick={() => { setEditTaskId(task.id); setSelected(null); }} aria-label={`Edit ${task.title}`}>
+              <button className="task-meta" onClick={() => { setDetailsFullscreen(false); setEditTaskId(task.id); setSelected(null); }} aria-label={`Edit ${task.title}`}>
                 <div className="task-title-row"><h3>{task.title}</h3><div className="task-head-meta">{(task.dependencies?.length ?? 0) > 0 && <span title={`${task.dependencies?.length} dependencies`}>↳ {task.dependencies?.length}</span>}{(task.links?.length ?? 0) > 0 && <span title={`${task.links?.length} reference links`}>↗ {task.links?.length}</span>}<span className={`priority ${task.priority.toLowerCase()}`}>{task.priority}</span></div></div>
                 <div className="task-subline"><span className="workspace-label" style={{ color: workspaces[task.project]?.color }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span></div>
                 <div className="tags">{task.tags.map((tag) => <span key={tag} style={{ color: tagLibrary[tag] ?? "#66736b", background: `${tagLibrary[tag] ?? "#718096"}1c` }}>{tag}</span>)}<span className="task-progress">{progress(task)}%</span></div>
@@ -880,7 +874,7 @@ export default function Home() {
               <div className="journey" style={{ gridTemplateColumns: `repeat(${task.steps.length + 1}, minmax(42px, 1fr))` }}>
                 <div className="journey-line" style={{ left: `calc(50% / ${task.steps.length + 1})`, right: `calc(50% / ${task.steps.length + 1})` }}><i style={{ width: `${progress(task)}%` }} /></div>
                 {task.steps.map((step) => (
-                  <button key={step.id} className={`step ${step.status} ${selected?.taskId === task.id && selected.stepId === step.id ? "active" : ""}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}>
+                  <button key={step.id} className={`step ${step.status} ${selected?.taskId === task.id && selected.stepId === step.id ? "active" : ""}`} onClick={() => { setDetailsFullscreen(false); setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}>
                     <span className="step-dot">{step.status === "done" ? "✓" : step.status === "blocked" ? "!" : ""}</span>
                     <strong>{step.label}</strong><small>{formatDeadline(step.deadline)}</small>{step.note && <b className="note-mark">•</b>}
                   </button>
@@ -944,7 +938,7 @@ export default function Home() {
             <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment.name}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) uploadAttachment(file); e.currentTarget.value = ""; }} /></label>{selectedStep.attachment && <a className="attachment-download" href={`/api/attachments/${encodeURIComponent(selectedStep.attachment.id)}`} target="_blank" rel="noreferrer">Open</a>}</div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
-          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => setSelected(null)}>Done</button></div>
+          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setSelected(null); }}>Done</button></div>
         </aside>
       )}
 
