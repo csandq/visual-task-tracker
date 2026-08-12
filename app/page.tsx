@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Dropdown } from "@/components/interior/dropdown";
+import { ExpandingSearch } from "@/components/interior/expanding-search";
+import { FloatingLabelInput } from "@/components/interior/floating-label";
 
 type Status = "done" | "in-progress" | "blocked" | "todo";
 type Priority = "High" | "Medium" | "Low";
@@ -236,6 +239,7 @@ export default function Home() {
   const [filter, setFilter] = useState("All work");
   const [sortBy, setSortBy] = useState<"manual" | "urgency" | "deadline">("manual");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [searchQuery, setSearchQuery] = useState("");
   const [stepSortBy, setStepSortBy] = useState<"urgency" | "deadline">("urgency");
   const [stepSortDirection, setStepSortDirection] = useState<"asc" | "desc">("asc");
   const [showNew, setShowNew] = useState(false);
@@ -245,7 +249,7 @@ export default function Home() {
   const [dragged, setDragged] = useState<number | null>(null);
   const [collapsedTasks, setCollapsedTasks] = useState<number[]>(() => seedTasks.map((task) => task.id));
   const [ready, setReady] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
   const [editTaskId, setEditTaskId] = useState<number | null>(null);
   const [tagDraft, setTagDraft] = useState("");
@@ -448,7 +452,7 @@ export default function Home() {
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
     const matchesFilter = filter === "All work" || (filter === "In progress" && task.steps.some((s) => s.status === "in-progress")) || (filter === "Blocked" && task.steps.some((s) => s.status === "blocked")) || task.priority === filter;
-    return matchesFilter && (!activeWorkspace || task.project === activeWorkspace);
+    return matchesFilter && (!activeWorkspace || task.project === activeWorkspace) && (!searchQuery.trim() || `${task.title} ${task.project} ${task.tags.join(" ")}`.toLowerCase().includes(searchQuery.trim().toLowerCase()));
     });
     if (sortBy === "manual") return filtered;
     const urgencyRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
@@ -462,7 +466,7 @@ export default function Home() {
       const result = aDeadline - bDeadline || a.title.localeCompare(b.title);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [tasks, filter, activeWorkspace, sortBy, sortDirection]);
+  }, [tasks, filter, activeWorkspace, sortBy, sortDirection, searchQuery]);
 
   const selectedTask = selected ? tasks.find((task) => task.id === selected.taskId) : undefined;
   const selectedStep = selectedTask?.steps.find((step) => step.id === selected?.stepId);
@@ -825,7 +829,7 @@ export default function Home() {
       <section className="workspace">
         <header className="topbar">
           <div className="topbar-intro"><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p>{currentView === "backlog" && <h1>Welcome, Christian.</h1>}{currentView === "journeys" && <><h1>{greeting}, Christian.</h1><p className="topbar-sub">Your workstreams, milestones, and next steps in one view.</p></>}</div>
-          <div className="top-actions"><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
+          <div className="top-actions">{currentView === "journeys" && <ExpandingSearch value={searchQuery} onChange={setSearchQuery} onSubmit={setSearchQuery} placeholder="Search workstreams" />}<div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <span className="t-badge" data-open={notificationsOpen ? "true" : "false"}><span className="t-badge-dot">{visibleNotifications.length}</span></span>}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
@@ -856,7 +860,7 @@ export default function Home() {
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input className={formError ? "input-error" : ""} value={quickTitle} onChange={(event) => { setQuickTitle(event.target.value); setFormError(""); }} placeholder="What needs doing?" aria-label="Quick task name" aria-invalid={Boolean(formError)} autoComplete="new-password" inputMode="text" name="kairos-capture" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-np-autofill="false" data-np-autofill-field-type="nope"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
+          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><FloatingLabelInput label="What needs doing?" value={quickTitle} onChange={(value) => { setQuickTitle(value); setFormError(""); }} id="kairos-capture" name="kairos-capture" autoComplete="new-password" /><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
           <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
             <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
@@ -879,7 +883,8 @@ export default function Home() {
 
         <div className="content-head">
           <div><h2>{activeWorkspace ? "Work in this workspace" : "Workstreams"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
-          <div className="content-controls"><label className="sort-control"><span>Sort by</span><select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} aria-label="Sort workstreams"><option value="manual">Default order</option><option value="urgency">Urgency</option><option value="deadline">Deadline date</option></select><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters">
+          <div className="content-controls"><label className="sort-control"><span>Sort by</span><Dropdown label="Sort workstreams" value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} items={[{ value: "manual", label: "Default order" }, { value: "urgency", label: "Urgency" }, { value: "deadline", label: "Deadline date" }]} /><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters t-tabs">
+            <span className="t-tabs-pill" aria-hidden="true" />
             {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
           </div></div>
         </div>
