@@ -99,6 +99,13 @@ function dateKey(date: Date) {
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 }
 
+function isoWeekNumber(date: Date) {
+  const thursday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  thursday.setDate(thursday.getDate() + 4 - (thursday.getDay() || 7));
+  const yearStart = new Date(thursday.getFullYear(), 0, 1);
+  return Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+}
+
 function parseDateKey(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -227,7 +234,6 @@ export default function Home() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [stepSortBy, setStepSortBy] = useState<"urgency" | "deadline">("urgency");
   const [stepSortDirection, setStepSortDirection] = useState<"asc" | "desc">("asc");
-  const [query, setQuery] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [quickTitle, setQuickTitle] = useState("");
@@ -254,12 +260,12 @@ export default function Home() {
   const [saveError, setSaveError] = useState("");
   const [serverReady, setServerReady] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => { const today = new Date(); return new Date(today.getFullYear(), today.getMonth(), 1); });
+  const [calendarWorkspace, setCalendarWorkspace] = useState("All workspaces");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [formError, setFormError] = useState("");
   const [clock, setClock] = useState(() => new Date());
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const newTitleRef = useRef<HTMLInputElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const saveAttemptRef = useRef(0);
@@ -376,7 +382,7 @@ export default function Home() {
   }, [tasks, tagLibrary, workspaces, activityLog, dismissedNotificationIds, ready, serverReady]);
 
   useEffect(() => {
-    function focusSearch(event: KeyboardEvent) {
+    function handleShortcuts(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         setSidebarCollapsed((value) => !value);
@@ -384,13 +390,15 @@ export default function Home() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        const firstWorkspace = Object.entries(workspaces).find(([, info]) => info.active)?.[0] ?? Object.keys(workspaces)[0] ?? "";
+        setNewWorkspace(activeWorkspace ?? firstWorkspace);
+        setFormError("");
+        setShowNew(true);
       }
     }
-    window.addEventListener("keydown", focusSearch);
-    return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+    window.addEventListener("keydown", handleShortcuts);
+    return () => window.removeEventListener("keydown", handleShortcuts);
+  }, [activeWorkspace, workspaces]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 1000);
@@ -433,10 +441,8 @@ export default function Home() {
 
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
-    const searchable = [task.title, task.project, task.tags.join(" "), ...task.steps.flatMap((step) => [step.label, step.note, step.people ?? "", step.owner ?? "", step.deadline])].join(" ");
-    const matchesQuery = searchable.toLowerCase().includes(query.trim().toLowerCase());
     const matchesFilter = filter === "All work" || (filter === "In progress" && task.steps.some((s) => s.status === "in-progress")) || (filter === "Blocked" && task.steps.some((s) => s.status === "blocked")) || task.priority === filter;
-    return matchesQuery && matchesFilter && (!activeWorkspace || task.project === activeWorkspace);
+    return matchesFilter && (!activeWorkspace || task.project === activeWorkspace);
     });
     if (sortBy === "manual") return filtered;
     const urgencyRank: Record<Priority, number> = { High: 0, Medium: 1, Low: 2 };
@@ -450,7 +456,7 @@ export default function Home() {
       const result = aDeadline - bDeadline || a.title.localeCompare(b.title);
       return sortDirection === "asc" ? result : -result;
     });
-  }, [tasks, filter, query, activeWorkspace, sortBy, sortDirection]);
+  }, [tasks, filter, activeWorkspace, sortBy, sortDirection]);
 
   const selectedTask = selected ? tasks.find((task) => task.id === selected.taskId) : undefined;
   const selectedStep = selectedTask?.steps.find((step) => step.id === selected?.stepId);
@@ -485,7 +491,7 @@ export default function Home() {
     return Array.from({ length: 42 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
   }, [calendarMonth]);
   const calendarLabel = calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const headerDateLabel = clock.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" }).toUpperCase();
+  const headerDateLabel = `W${String(isoWeekNumber(clock)).padStart(2, "0")} · ${clock.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}`.toUpperCase();
   const headerTimeLabel = clock.toLocaleTimeString(undefined, { hour12: false });
   const greeting = greetingForHour(new Date().getHours());
 
@@ -607,11 +613,15 @@ export default function Home() {
 
   function addBacklogTask() {
     const title = quickTitle.trim();
-    if (!title) return;
+    if (!title) {
+      setFormError("Write a task before adding it.");
+      return;
+    }
     const id = nextAvailableId(tasks);
     setTasks((current) => [{ id, title, project: "Backlog", tags: [], priority: "Medium", links: [], dependencies: [], steps: [], backlog: true }, ...current]);
     setActivityLog((current) => [...current, { id: Date.now() * 1000, timestamp: new Date().toISOString(), action: "added", entity: "journey", message: `Added “${title}” to the backlog.` }].slice(-200));
     setQuickTitle("");
+    setFormError("");
   }
 
   function finishTaskEdit(task: Task) {
@@ -769,10 +779,10 @@ export default function Home() {
   return (
     <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span><span className="brand-orbit" aria-hidden="true"/></div></div>
+        <div className="brand"><span className="brand-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg></span><div><span className="brand-name">Kairos</span></div></div>
         <button className="collapse-toggle" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>{sidebarCollapsed ? "›" : "‹"}</button>
         <nav aria-label="Primary navigation">
-          <button className={`nav-item ${currentView === "backlog" ? "active" : ""}`} title="Start" onClick={() => navigateTo("backlog")}><span>＋</span><span className="nav-text">Start</span><b>{tasks.filter((task) => task.backlog).length}</b></button>
+          <button className={`nav-item ${currentView === "backlog" ? "active" : ""}`} title="Welcome" onClick={() => navigateTo("backlog")}><span>＋</span><span className="nav-text">Welcome</span><b>{tasks.filter((task) => task.backlog).length}</b></button>
           <button className={`nav-item ${currentView === "journeys" ? "active" : ""}`} title="Workstreams" onClick={() => navigateTo("journeys")}><span>⌁</span><span className="nav-text">Workstreams</span></button>
           <button className={`nav-item ${currentView === "my-tasks" ? "active" : ""}`} title="My steps" onClick={() => { navigateTo("my-tasks"); setSelected(null); setEditTaskId(null); }}><span>◫</span><span className="nav-text">My steps</span><b>{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</b></button>
           <button className={`nav-item ${currentView === "calendar" ? "active" : ""}`} title="Calendar" onClick={() => { navigateTo("calendar"); setSelected(null); setEditTaskId(null); }}><span>⌑</span><span className="nav-text">Calendar</span></button>
@@ -788,8 +798,8 @@ export default function Home() {
 
       <section className="workspace">
         <header className="topbar">
-          <div className="topbar-intro"><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p>{currentView === "backlog" && <><h1>Start, Christian.</h1><p className="topbar-sub">Capture what matters now. Shape the work when you are ready.</p></>}{currentView === "journeys" && <><h1>{greeting}, Christian.</h1><p className="topbar-sub">Your workstreams, milestones, and next steps in one view.</p></>}</div>
-          <div className="top-actions"><label className="search"><span>⌕</span><input ref={searchInputRef} value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search tasks, steps, notes, and people"/><kbd>⌘K / Ctrl K</kbd></label><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
+          <div className="topbar-intro"><p className="eyebrow date-label">{headerDateLabel} · {headerTimeLabel}</p>{currentView === "backlog" && <h1>Welcome, Christian.</h1>}{currentView === "journeys" && <><h1>{greeting}, Christian.</h1><p className="topbar-sub">Your workstreams, milestones, and next steps in one view.</p></>}</div>
+          <div className="top-actions"><div className="notification-wrap" ref={notificationRef}><button className="icon-btn" aria-label={`${visibleNotifications.length} attention notifications`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((value) => !value)}>♧{visibleNotifications.length > 0 && <i />}</button>{notificationsOpen && <div className="notification-popover" role="status"><div className="notification-head"><strong>Attention queue</strong><div><button className="notification-clear" onClick={() => { setDismissedNotificationIds(blockedSteps.map(({ step }) => step.id)); setNotificationsOpen(false); }}>Clear</button><button className="notification-dismiss" aria-label="Close attention queue" onClick={() => setNotificationsOpen(false)}>×</button></div></div>{visibleNotifications.length > 0 ? visibleNotifications.slice(0, 4).map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setNotificationsOpen(false); }}><b>{step.label}</b><span>{task.title}</span></button>) : <p>No attention items right now.</p>}<small className="notification-help">Items appear when a step is marked Blocked. Clearing hides current alerts until another blocked step is created.</small></div>}</div>{currentView !== "backlog" && <button className="new-btn" onClick={openNewTask}><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button>}</div>
         </header>
 
         {(saveState === "error" || saveState === "offline") && <div className="save-status" role="alert"><span>{saveError || "Your latest changes are not saved to the server."}</span><button onClick={retrySave}>{serverReady ? "Retry save" : "Reconnect"}</button></div>}
@@ -820,23 +830,23 @@ export default function Home() {
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Kairos</h2><p>Capture a task now. Shape the work with steps and a workspace when you are ready.</p><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} placeholder="What needs doing?" aria-label="Quick task name"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form></div>
+          <div className="backlog-hero"><p className="eyebrow">QUICK ACTION</p><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input className={formError ? "input-error" : ""} value={quickTitle} onChange={(event) => { setQuickTitle(event.target.value); setFormError(""); }} placeholder="What needs doing?" aria-label="Quick task name" aria-invalid={Boolean(formError)}/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
           <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
             <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
         </section> : currentView === "calendar" ? <section className="calendar-page">
-          <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active journey, organized by deadline.</p></div><div className="calendar-actions"><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
+          <div className="view-title"><div><p className="eyebrow">DEADLINES</p><h2>{calendarLabel}</h2><p>Milestones from every active journey, organized by deadline.</p></div><div className="calendar-actions"><label className="calendar-workspace-filter"><span>Workspace</span><select value={calendarWorkspace} onChange={(event) => setCalendarWorkspace(event.target.value)}><option>All workspaces</option>{Object.entries(workspaces).filter(([, info]) => info.active).map(([name]) => <option key={name}>{name}</option>)}</select></label><button aria-label="Previous month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>‹</button><button className="today" onClick={() => { const today = new Date(); setCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1)); }}>Today</button><button aria-label="Next month" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>›</button></div></div>
           <div className="calendar-weekdays">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((day) => <span key={day}>{day}</span>)}</div>
-          <div className="calendar-grid">{calendarDates.map((date) => { const key = dateKey(date); const inMonth = date.getMonth() === calendarMonth.getMonth() && date.getFullYear() === calendarMonth.getFullYear(); const events = tasks.flatMap((task) => task.steps.filter((step) => normalizeDeadline(step.deadline) === key).map((step) => ({ task, step }))); return <div key={key} className={`calendar-day ${inMonth ? "" : "outside"} ${key === todayKey ? "today-cell" : ""}`}><span>{date.getDate()}</span>{events.map(({ task, step }) => <button key={`${task.id}-${step.id}`} className="calendar-event" style={{ borderLeftColor: workspaces[task.project]?.color ?? "#91a09a", background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}><i style={{ background: workspaces[task.project]?.color ?? "#91a09a" }}/><strong>{step.label}</strong><small>{task.title}</small></button>)}</div>; })}</div>
+          <div className="calendar-grid">{calendarDates.map((date) => { const key = dateKey(date); const inMonth = date.getMonth() === calendarMonth.getMonth() && date.getFullYear() === calendarMonth.getFullYear(); const events = tasks.flatMap((task) => task.steps.filter((step) => normalizeDeadline(step.deadline) === key && (calendarWorkspace === "All workspaces" || task.project === calendarWorkspace)).map((step) => ({ task, step }))); return <div key={key} className={`calendar-day ${inMonth ? "" : "outside"} ${key === todayKey ? "today-cell" : ""}`}><span>{date.getDate()}</span>{events.map(({ task, step }) => <button key={`${task.id}-${step.id}`} className="calendar-event" style={{ borderLeftColor: workspaces[task.project]?.color ?? "#91a09a", background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }} onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}><i style={{ background: workspaces[task.project]?.color ?? "#91a09a" }}/><strong>{step.label}</strong><small>{task.title}</small></button>)}</div>; })}</div>
           <div className="calendar-legend">{Object.entries(workspaces).filter(([, info]) => info.active).map(([name, info]) => <span key={name}><i style={{ background: info.color }}/>{name}</span>)}</div>
         </section> : currentView === "my-tasks" ? <section className="my-tasks-page">
-          <div className="view-title"><div><p className="eyebrow">YOUR NEXT ACTIONS</p><h2>My steps</h2><p>Individual steps assigned to you across every workstream.</p></div><div className="view-title-actions"><label className="sort-control"><span>Sort by</span><select value={stepSortBy} onChange={(e) => setStepSortBy(e.target.value as typeof stepSortBy)}><option value="urgency">Urgency</option><option value="deadline">Deadline</option></select><button className="sort-direction" onClick={() => setStepSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${stepSortDirection === "asc" ? "descending" : "ascending"}`}>{stepSortDirection === "asc" ? "↑" : "↓"}</button></label><span>My steps — Currently {tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length} open steps</span></div></div>
+          <div className="view-title"><div><p className="eyebrow">YOUR NEXT ACTIONS</p><h2>My steps <span className="heading-count">{tasks.flatMap((task) => task.steps).filter((step) => step.status !== "done").length}</span></h2><p>Individual steps assigned to you across every workstream.</p></div><div className="view-title-actions"><label className="sort-control"><span>Sort by</span><select value={stepSortBy} onChange={(e) => setStepSortBy(e.target.value as typeof stepSortBy)}><option value="urgency">Urgency</option><option value="deadline">Deadline</option></select><button className="sort-direction" onClick={() => setStepSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${stepSortDirection === "asc" ? "descending" : "ascending"}`}>{stepSortDirection === "asc" ? "↑" : "↓"}</button></label></div></div>
           <div className="action-list">{sortedOpenSteps.map(({ task, step }) => <article key={`${task.id}-${step.id}`}><button className={`action-check ${step.status}`} aria-label={`${statusLabel[step.status]}. Change status`} title="Change status" onClick={() => setStepStatus(task.id, step.id, step.status === "blocked" ? "in-progress" : step.status === "in-progress" ? "done" : "in-progress")}>{step.status === "blocked" ? "!" : step.status === "in-progress" ? "·" : ""}</button><div><button className="step-name-link" onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}>{step.label}</button><p>{task.title}</p></div><span className="workspace-chip" style={{ color: workspaces[task.project]?.color, background: `${workspaces[task.project]?.color ?? "#91a09a"}18` }}><i style={{ background: workspaces[task.project]?.color }}/>{task.project}</span><time>{formatDeadline(step.deadline)}</time><button className="open-action" onClick={() => { setSelected({ taskId: task.id, stepId: step.id }); setEditTaskId(null); }}>Open</button></article>)}</div>
           {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open steps</h3><p>Every step is done. Capture the next thing to move.</p></div>}
         </section> : <>
         <section className="overview">
           <div className="urgent-focus"><span><b>✦</b> NEXT STEPS</span><strong>Five steps worth moving</strong><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div>{urgentSteps.length === 0 && <p>Everything is complete. Capture the next thing to move.</p>}</div>
-          <div className="overview-metrics"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> in {closestDeadlineDays} {closestDeadlineDays === 1 ? "day" : "days"}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div><div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
+          <div className="overview-metrics"><div className="momentum-head"><div><span className="momentum-icon">⌁</span><div><strong>Momentum this week</strong><small>Live snapshot of your workflow</small></div></div><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> in {closestDeadlineDays} {closestDeadlineDays === 1 ? "day" : "days"}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
