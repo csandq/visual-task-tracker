@@ -837,17 +837,18 @@ h1, h2, h3, h4, h5, h6,
 .new-workspace-row>input { font-size:12px; }
 .new-workspace-row>button { width:auto; min-width:0; padding:0 10px!important; font-size:10px!important; }
 .workspace-status.system { display:inline-flex; align-items:center; justify-content:center; min-height:24px; text-align:center; }
-.backlog-hero h2 { font-family:var(--mock-mono)!important; font-size:14px; letter-spacing:.24em; text-transform:uppercase; font-weight:400; }
+.backlog-hero h2 { font-family:var(--mock-mono)!important; font-size:28px; letter-spacing:.24em; text-transform:uppercase; font-weight:500; }
+.backlog-hero form { width:min(260px,100%); }
 .status-pixels { display:grid; grid-template-columns:repeat(3,4px); gap:2px; width:16px; height:16px; }
 .status-pixels i { width:4px; height:4px; border-radius:1px; background:var(--mock-pos); opacity:.2; animation:status-pixel 650ms ease-in-out infinite; }
-.status-loader { display:flex; align-items:center; gap:7px; }
-.status-loader strong { color:var(--mock-text); font:500 13px var(--mock-sans); }
+.status-loader { display:flex; align-items:center; gap:9px; padding-left:5px; }
+.status-loader strong { color:var(--mock-text); font:500 13px/16px var(--mock-sans); }
 .status-loader .status-pixels { flex:0 0 16px; }
 @keyframes status-pixel { 50% { opacity:1; transform:scale(1.25); } }
 .momentum-stats .overview-stat.in-motion span, .momentum-stats .overview-stat.in-motion p { color:var(--mock-pos); }
 .momentum-stats .overview-stat.blocked span, .momentum-stats .overview-stat.blocked p { color:var(--mock-warn); }
 .urgent-focus { min-height:116px!important; display:flex; align-items:flex-start; }
-.urgent-focus>span { color:var(--mock-muted); font-size:12px; letter-spacing:.1em; }
+.urgent-focus>span { color:var(--mock-text); font:500 13px var(--mock-sans); letter-spacing:.08em; }
 .urgent-focus .urgent-step-list { margin-top:12px; }
 .urgent-focus .urgent-step-list button { padding:4px 0; }
 .overview-metrics { gap:9px; padding-top:13px; }
@@ -877,6 +878,10 @@ h1, h2, h3, h4, h5, h6,
 .momentum-stats .overview-stat strong { font-size:48px!important; }
 .momentum-stats .overview-stat p { margin-top:auto; padding-top:12px; border-top:1px solid var(--mock-rule); width:100%; font-size:14px!important; }
 .overview-metrics .mini-progress { min-height:84px; padding:14px 18px!important; border:1px solid var(--mock-rule-2); border-radius:12px; background:var(--mock-bg); }
+.overview-metrics .mini-progress { grid-template-columns:auto 58px minmax(150px,1fr); gap:12px; }
+.completion-line { width:100%; height:58px; overflow:visible; }
+.completion-line polyline { fill:none; stroke:var(--mock-pos); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.completion-line circle { fill:var(--mock-pos); }
 
 @media (max-width:820px) {
   .momentum-head { align-items:flex-start; flex-direction:column; }
