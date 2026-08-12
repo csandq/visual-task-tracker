@@ -110,7 +110,7 @@ function isoWeekNumber(date: Date) {
 }
 
 function StatusLoadingState() {
-  return <div className="status-loader"><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span><strong>Status</strong></div>;
+  return <strong className="status-heading">Status</strong>;
 }
 
 function parseDateKey(value: string) {
