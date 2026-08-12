@@ -622,6 +622,12 @@ body, button, input, textarea, select,
 .detail-panel .activity p small { font-size:10px; }
 .detail-panel .panel-footer span { font-size:10px; }
 .panel-scrim { display:block; background:transparent; cursor:default; }
+.panel-head-actions { display:flex; align-items:flex-start; gap:10px; }
+.panel-head-actions .panel-expand { width:auto; height:28px; padding:0 9px; border:1px solid var(--mock-rule-2); border-radius:7px; background:var(--mock-chip); color:var(--mock-muted); font:10px var(--mock-sans); }
+.panel-head-actions .panel-expand:hover { color:var(--mock-text); background:var(--mock-hi); }
+.details-fullscreen { position:fixed!important; z-index:30; top:5vh; right:5vw; bottom:5vh; width:min(70vw,980px)!important; max-width:none; border:1px solid var(--mock-rule-2); border-radius:14px; box-shadow:0 24px 80px #000b; }
+.details-fullscreen .panel-body { padding:26px 30px; }
+.panel-scrim { z-index:25; background:#0007; }
 
 @media (max-width:820px) {
   .content-controls { align-items:flex-start; flex-direction:column-reverse; gap:8px; }
@@ -823,6 +829,31 @@ h1, h2, h3, h4, h5, h6,
 .calendar-workspace-filter select { min-height:31px; padding:0 27px 0 10px; border:0; border-radius:9px; color:var(--mock-text); background:var(--mock-chip); box-shadow:var(--mock-chipsh); font-size:11px; }
 .action-list p { font-size:12px; }
 .step-footer .save-btn { display:flex; align-items:center; justify-content:center; text-align:center; }
+.task-footer .save-btn { font-size:11px; }
+.settings-page .workspace-name-edit textarea { resize:none; }
+.new-workspace-row { grid-template-columns:minmax(0,1fr) 130px auto; }
+.new-workspace-row>input { font-size:12px; }
+.new-workspace-row>button { width:auto; min-width:0; padding:0 10px!important; font-size:10px!important; }
+.workspace-status.system { display:inline-flex; align-items:center; justify-content:center; min-height:24px; text-align:center; }
+.backlog-hero h2 { font-family:var(--mock-mono)!important; font-size:14px; letter-spacing:.24em; text-transform:uppercase; font-weight:400; }
+.status-pixels { display:grid; grid-template-columns:repeat(3,4px); gap:2px; width:16px; height:16px; }
+.status-pixels i { width:4px; height:4px; border-radius:1px; background:var(--mock-pos); opacity:.2; animation:status-pixel 650ms ease-in-out infinite; }
+.status-loader { display:flex; align-items:center; gap:10px; }
+.status-loader strong { color:var(--mock-text); font:500 13px var(--mock-sans); }
+.status-loader time { color:var(--mock-muted); font:12px var(--mock-mono); font-variant-numeric:tabular-nums; }
+@keyframes status-pixel { 50% { opacity:1; transform:scale(1.25); } }
+.momentum-stats .overview-stat.in-motion span, .momentum-stats .overview-stat.in-motion p { color:var(--mock-pos); }
+.momentum-stats .overview-stat.blocked span, .momentum-stats .overview-stat.blocked p { color:var(--mock-warn); }
+.overview-metrics { gap:9px; padding-top:13px; }
+.momentum-head small { display:none; }
+.overview-metrics .mini-progress { display:grid; grid-template-columns:auto 190px 1fr; align-items:center; gap:16px; }
+.overview-metrics .mini-progress > span { display:flex; flex-direction:column; gap:4px; }
+.overview-metrics .mini-progress > span b { color:var(--mock-muted); font:10px var(--mock-sans); letter-spacing:0; white-space:nowrap; }
+.weekly-days { display:flex; align-items:stretch; justify-content:space-between; height:66px; gap:10px; }
+.weekly-days > div { display:flex; min-width:18px; flex:1; flex-direction:column; align-items:center; justify-content:flex-end; gap:4px; }
+.weekly-days span { color:var(--mock-muted); font:10px var(--mock-mono); }
+.weekly-days i { display:block; width:10px; min-height:8px; border-radius:999px; background:var(--mock-pos); opacity:.9; }
+.weekly-days b { color:var(--mock-faint); font:9px var(--mock-mono); }
 
 .overview-metrics { display:grid; grid-template-columns:1fr; gap:12px; padding:18px 20px; }
 .momentum-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -843,4 +874,7 @@ h1, h2, h3, h4, h5, h6,
   .momentum-head { align-items:flex-start; flex-direction:column; }
   .momentum-status { align-self:flex-start; }
   .calendar-workspace-filter span { display:none; }
+  .details-fullscreen { top:2vh; right:2vw; bottom:2vh; width:96vw!important; }
+  .overview-metrics .mini-progress { grid-template-columns:1fr; height:auto; }
+  .weekly-days { min-height:66px; }
 }
