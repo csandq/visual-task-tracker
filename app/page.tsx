@@ -106,6 +106,18 @@ function isoWeekNumber(date: Date) {
   return Math.ceil((((thursday.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
 }
 
+const weekDayLabels = ["M", "T", "W", "T", "F", "S", "S"];
+
+function StatusLoadingState() {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setElapsed((value) => value + 1), 100);
+    return () => window.clearInterval(timer);
+  }, []);
+  const elapsedLabel = elapsed < 600 ? `${(elapsed / 10).toFixed(1)}s` : `${Math.floor(elapsed / 600)}m ${((elapsed % 600) / 10).toFixed(1)}s`;
+  return <div className="status-loader"><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span><strong>Status</strong><time>{elapsedLabel}</time></div>;
+}
+
 function parseDateKey(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
@@ -261,6 +273,7 @@ export default function Home() {
   const [serverReady, setServerReady] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(() => { const today = new Date(); return new Date(today.getFullYear(), today.getMonth(), 1); });
   const [calendarWorkspace, setCalendarWorkspace] = useState("All workspaces");
+  const [detailsFullscreen, setDetailsFullscreen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<number[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
@@ -483,6 +496,9 @@ export default function Home() {
   const closestDeadlineDays = closestStep ? Math.max(0, Math.ceil((closestStep.date.getTime() - new Date(clock.getFullYear(), clock.getMonth(), clock.getDate()).getTime()) / 86_400_000)) : null;
   const allSteps = tasks.flatMap((task) => task.steps);
   const weeklyProgress = allSteps.length === 0 ? 0 : Math.round((allSteps.filter((step) => step.status === "done").length / allSteps.length) * 100);
+  const weekStart = new Date(clock.getFullYear(), clock.getMonth(), clock.getDate() - ((clock.getDay() + 6) % 7));
+  const weeklyDayCounts = weekDayLabels.map((_, dayIndex) => allSteps.reduce((count, step) => count + (step.activity ?? []).filter((entry) => entry.status === "done" && (() => { const date = new Date(entry.timestamp); return date.getDay() === (dayIndex + 1) % 7 && date >= weekStart; })()).length, 0));
+  const weeklyDayMax = Math.max(1, ...weeklyDayCounts);
   const todayKey = dateKey(new Date());
   const calendarDates = useMemo(() => {
     const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
@@ -846,7 +862,7 @@ export default function Home() {
         </section> : <>
         <section className="overview">
           <div className="urgent-focus"><span><b>✦</b> NEXT STEPS</span><strong>Five steps worth moving</strong><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div>{urgentSteps.length === 0 && <p>Everything is complete. Capture the next thing to move.</p>}</div>
-          <div className="overview-metrics"><div className="momentum-head"><div><span className="momentum-icon">⌁</span><div><strong>Momentum this week</strong><small>Live snapshot of your workflow</small></div></div><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> in {closestDeadlineDays} {closestDeadlineDays === 1 ? "day" : "days"}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS</span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div></div></div>
+          <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div><div className="weekly-days" aria-label="Completed steps by weekday">{weekDayLabels.map((label, index) => <div key={`${label}-${index}`}><span>{label}</span><i style={{ height: `${Math.max(12, (weeklyDayCounts[index] / weeklyDayMax) * 100)}%` }} /><b>{weeklyDayCounts[index]}</b></div>)}</div></div></div>
         </section>
 
         {activeWorkspace && <section className="workspace-context" style={{ borderColor: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}66`, background: `${workspaces[activeWorkspace]?.color ?? "#91a09a"}18` }}><span className="project-dot" style={{ background: workspaces[activeWorkspace]?.color }} /><div><small>WORKSPACE / PROJECT</small><h2>{activeWorkspace}</h2><p>{workspaces[activeWorkspace]?.description}</p></div><div className="workspace-summary"><strong>{visibleTasks.length}</strong><span>tasks</span></div><button onClick={() => setActiveWorkspace(null)}>View all workspaces</button></section>}
@@ -888,11 +904,11 @@ export default function Home() {
         </>}
       </section>
 
-      {(taskToEdit || (selectedStep && selectedTask)) && <button className="panel-scrim" onClick={() => { setEditTaskId(null); setSelected(null); }} aria-label="Close details" />}
+      {(taskToEdit || (selectedStep && selectedTask)) && <button className="panel-scrim" onClick={() => { setEditTaskId(null); setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details" />}
 
       {taskToEdit && (
-        <aside className="detail-panel task-editor">
-          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><button onClick={() => setEditTaskId(null)} aria-label="Close task details">×</button></div>
+        <aside className={`detail-panel task-editor ${detailsFullscreen ? "details-fullscreen" : ""}`}>
+          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setEditTaskId(null); setDetailsFullscreen(false); }} aria-label="Close task details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="task-name">Task name</label>
             <input id="task-name" className="title-input task-name-input" value={taskToEdit.title} onChange={(e) => updateTask(taskToEdit.id, { title: e.target.value })} />
@@ -914,13 +930,13 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{taskToEdit.backlog ? <span>Not in Journeys yet</span> : <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View task</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume task</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause task</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete task</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
+          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{taskToEdit.backlog ? <span>Not in Journeys yet</span> : <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
         </aside>
       )}
 
       {!taskToEdit && selectedStep && selectedTask && (
-        <aside className="detail-panel">
-          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><button onClick={() => setSelected(null)} aria-label="Close details">×</button></div>
+        <aside className={`detail-panel ${detailsFullscreen ? "details-fullscreen" : ""}`}>
+          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="step-name">Step name</label>
             <input id="step-name" className="title-input" value={selectedStep.label} onChange={(e) => updateStep({ label: e.target.value })} />
