@@ -109,13 +109,7 @@ function isoWeekNumber(date: Date) {
 const weekDayLabels = ["M", "T", "W", "T", "F", "S", "S"];
 
 function StatusLoadingState() {
-  const [elapsed, setElapsed] = useState(0);
-  useEffect(() => {
-    const timer = window.setInterval(() => setElapsed((value) => value + 1), 100);
-    return () => window.clearInterval(timer);
-  }, []);
-  const elapsedLabel = elapsed < 600 ? `${(elapsed / 10).toFixed(1)}s` : `${Math.floor(elapsed / 600)}m ${((elapsed % 600) / 10).toFixed(1)}s`;
-  return <div className="status-loader"><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span><strong>Status</strong><time>{elapsedLabel}</time></div>;
+  return <div className="status-loader"><strong>Status</strong><span className="status-pixels" aria-hidden="true">{Array.from({ length: 9 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 90}ms` }}/>)}</span></div>;
 }
 
 function parseDateKey(value: string) {
@@ -484,7 +478,6 @@ export default function Home() {
     return stepSortDirection === "asc" ? result : -result;
   }), [openSteps, stepSortBy, stepSortDirection]);
   const blockedSteps = openSteps.filter(({ step }) => step.status === "blocked");
-  const urgentSteps = sortedOpenSteps.slice(0, 5);
   const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
   const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
@@ -861,7 +854,7 @@ export default function Home() {
           {sortedOpenSteps.length === 0 && <div className="empty"><span>✓</span><h3>No open steps</h3><p>Every step is done. Capture the next thing to move.</p></div>}
         </section> : <>
         <section className="overview">
-          <div className="urgent-focus"><span><b>✦</b> NEXT STEPS</span><strong>Five steps worth moving</strong><div className="urgent-step-list">{urgentSteps.map(({ task, step }) => <button key={`${task.id}-${step.id}`} onClick={() => setStepStatus(task.id, step.id, "done")}><span className={`action-check ${step.status}`} aria-hidden="true">{step.status === "blocked" ? "!" : ""}</span><span><b>{step.label}</b><small>{task.title} · {formatDeadline(step.deadline)}</small></span></button>)}</div>{urgentSteps.length === 0 && <p>Everything is complete. Capture the next thing to move.</p>}</div>
+          <div className="urgent-focus"><span>NEXT STEPS</span></div>
           <div className="overview-metrics"><div className="momentum-head"><StatusLoadingState /><span className="momentum-status"><i /> Updated just now</span></div><div className="momentum-stats"><div className="overview-stat in-motion"><span>IN MOTION</span><strong>{inMotionCount}</strong>{closestStep ? <p>Closest <button onClick={() => viewStepInMySteps(closestStep.task, closestStep.step)}>step deadline</button> {closestDeadlineDays === 0 ? "today" : `in ${closestDeadlineDays} ${closestDeadlineDays === 1 ? "day" : "days"}`}.</p> : <p>No upcoming step deadlines.</p>}</div><div className="overview-stat blocked"><span>BLOCKED</span><strong>{blockedCount}</strong><p>{blockedCount === 1 ? "Step needs attention." : "Steps need attention."}</p></div></div><div className="mini-progress"><span>WEEKLY PROGRESS <b>{allSteps.filter((step) => step.status === "done").length} of {allSteps.length} steps complete</b></span><div className="progress-ring" aria-label={`${weeklyProgress}% weekly progress`}><svg width="58" height="58" viewBox="0 0 58 58" aria-hidden="true"><circle cx="29" cy="29" r="23"/><circle className="progress-ring-value" cx="29" cy="29" r="23" pathLength="100" style={{ strokeDashoffset: 100 - weeklyProgress }}/></svg><small>{weeklyProgress}%</small></div><div className="weekly-days" aria-label="Completed steps by weekday">{weekDayLabels.map((label, index) => <div key={`${label}-${index}`}><span>{label}</span><i style={{ height: `${Math.max(12, (weeklyDayCounts[index] / weeklyDayMax) * 100)}%` }} /><b>{weeklyDayCounts[index]}</b></div>)}</div></div></div>
         </section>
 
@@ -904,7 +897,7 @@ export default function Home() {
         </>}
       </section>
 
-      {(taskToEdit || (selectedStep && selectedTask)) && <button className="panel-scrim" onClick={() => { setEditTaskId(null); setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details" />}
+      {(taskToEdit || (selectedStep && selectedTask)) && <button className={`panel-scrim ${detailsFullscreen ? "panel-scrim-dark" : ""}`} onClick={() => { setEditTaskId(null); setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details" />}
 
       {taskToEdit && (
         <aside className={`detail-panel task-editor ${detailsFullscreen ? "details-fullscreen" : ""}`}>
