@@ -597,6 +597,9 @@ export default function Home() {
   }
 
   function openNewTask() {
+    setDetailsFullscreen(false);
+    setEditTaskId(null);
+    setSelected(null);
     const firstWorkspace = Object.entries(workspaces).find(([, info]) => info.active)?.[0] ?? Object.keys(workspaces)[0] ?? "";
     setNewWorkspace(activeWorkspace ?? firstWorkspace);
     setFormError("");
@@ -634,6 +637,9 @@ export default function Home() {
   }
 
   function addBacklogTask() {
+    setDetailsFullscreen(false);
+    setEditTaskId(null);
+    setSelected(null);
     const title = quickTitle.trim();
     if (!title) {
       setFormError("Write a task before adding it.");
@@ -652,6 +658,7 @@ export default function Home() {
       recordActivity("moved", "journey", `Moved “${task.title}” from the backlog into journeys.`);
     }
     setEditTaskId(null);
+    setDetailsFullscreen(false);
   }
 
   function deleteTask(taskId: number) {
@@ -849,7 +856,7 @@ export default function Home() {
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input className={formError ? "input-error" : ""} value={quickTitle} onChange={(event) => { setQuickTitle(event.target.value); setFormError(""); }} placeholder="What needs doing?" aria-label="Quick task name" aria-invalid={Boolean(formError)} autoComplete="off" data-1p-ignore="true" data-lpignore="true" data-bwignore="true"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
+          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><input className={formError ? "input-error" : ""} value={quickTitle} onChange={(event) => { setQuickTitle(event.target.value); setFormError(""); }} placeholder="What needs doing?" aria-label="Quick task name" aria-invalid={Boolean(formError)} autoComplete="new-password" inputMode="text" name="kairos-capture" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" data-np-autofill="false" data-np-autofill-field-type="nope"/><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
           <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
             <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
@@ -911,19 +918,14 @@ export default function Home() {
 
       {taskToEdit && (
         <aside className={`detail-panel task-editor ${detailsFullscreen ? "details-fullscreen" : ""}`}>
-          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setEditTaskId(null); setDetailsFullscreen(false); }} aria-label="Close task details">×</button></div></div>
+          <div className="panel-head"><div><span>TASK DETAILS</span><strong>Edit the task, relationships, and context</strong></div><div className="panel-head-actions"><button className="save-btn panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setEditTaskId(null); setDetailsFullscreen(false); }} aria-label="Close task details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="task-name">Task name</label>
             <input id="task-name" className="title-input task-name-input" value={taskToEdit.title} onChange={(e) => updateTask(taskToEdit.id, { title: e.target.value })} />
             <div className="two-cols"><div><label className="field-label" htmlFor="task-workspace">Workspace / project</label><select id="task-workspace" value={taskToEdit.project} onChange={(e) => updateTask(taskToEdit.id, { project: e.target.value })}>{taskToEdit.backlog && <option value="Backlog">Backlog</option>}{Object.entries(workspaces).filter(([name, info]) => info.active || taskToEdit.project === name).map(([name]) => <option key={name}>{name}</option>)}</select></div><div><label className="field-label" htmlFor="task-priority">Priority</label><select id="task-priority" value={taskToEdit.priority} onChange={(e) => updateTask(taskToEdit.id, { priority: e.target.value as Priority })}><option>High</option><option>Medium</option><option>Low</option></select></div></div>
             {taskToEdit.backlog && <div className="backlog-panel-callout"><strong>Quick task</strong><span>Add at least one step and choose a workspace, then Done will move it into Workstreams.</span><button className="save-btn" onClick={() => addStep(taskToEdit.id)}>＋ Add step</button></div>}
-            <p className="field-label">Tags</p>
-            <div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div>
-            <div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div>
-            <div className="tag-suggestions">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).slice(0, 5).map((tag) => <button key={tag} onClick={() => addTagToTask(taskToEdit, tag)}><i style={{ background: tagLibrary[tag] }}/>{tag}</button>)}</div>
-            <p className="field-label">Reference links</p>
-            <div className="link-list">{(taskToEdit.links ?? []).map((link) => <div key={link}><a href={link} target="_blank" rel="noreferrer">↗ {link.replace(/^https?:\/\//, "")}</a><button onClick={() => updateTask(taskToEdit.id, { links: (taskToEdit.links ?? []).filter((item) => item !== link) })}>×</button></div>)}</div>
-            <div className="inline-add"><input value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="Paste a link" aria-label="Reference link"/><button onClick={() => { const value = normalizeLink(linkDraft); if (!value) { setFormError("Enter a valid http or https link."); return; } updateTask(taskToEdit.id, { links: [...(taskToEdit.links ?? []), value] }); setLinkDraft(""); setFormError(""); }}>Add</button></div>
+            <div className="task-steps-list"><p className="field-label">Steps</p><ol>{taskToEdit.steps.map((step) => <li key={step.id} className={step.status}><span>{step.label}</span><small>{statusLabel[step.status]}</small></li>)}</ol></div>
+            <div className="task-metadata-pair"><div><p className="field-label">Tags</p><div className="editable-tags">{taskToEdit.tags.map((tag) => <button key={tag} style={{ color: tagLibrary[tag], background: `${tagLibrary[tag]}1c` }} onClick={() => updateTask(taskToEdit.id, { tags: taskToEdit.tags.filter((item) => item !== tag) })}>{tag} ×</button>)}</div><div className="inline-add"><input list="tag-library-options" value={tagDraft} onChange={(e) => setTagDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); } }} placeholder="Type or choose a tag"/><datalist id="tag-library-options">{Object.keys(tagLibrary).filter((tag) => !taskToEdit.tags.includes(tag)).map((tag) => <option key={tag} value={tag}/>)}</datalist><button onClick={() => { addTagToTask(taskToEdit, tagDraft); setTagDraft(""); }}>Add</button></div></div><div><p className="field-label">Reference links</p><div className="link-list">{(taskToEdit.links ?? []).map((link) => <div key={link}><a href={link} target="_blank" rel="noreferrer">↗ {link.replace(/^https?:\/\//, "")}</a><button onClick={() => updateTask(taskToEdit.id, { links: (taskToEdit.links ?? []).filter((item) => item !== link) })}>×</button></div>)}</div><div className="inline-add"><input value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} placeholder="Paste a link" aria-label="Reference link"/><button onClick={() => { const value = normalizeLink(linkDraft); if (!value) { setFormError("Enter a valid http or https link."); return; } updateTask(taskToEdit.id, { links: [...(taskToEdit.links ?? []), value] }); setLinkDraft(""); setFormError(""); }}>Add</button></div></div></div>
             {formError && <p className="form-error" role="alert">{formError}</p>}
             <p className="field-label">Dependencies</p>
             <p className="field-help">Choose a task that must move first.</p>
@@ -933,13 +935,13 @@ export default function Home() {
             </div>
             <ul className="selected-dependencies">{(taskToEdit.dependencies ?? []).map((id) => { const dependency = tasks.find((task) => task.id === id); if (!dependency) return null; const workspaceColor = workspaces[dependency.project]?.color ?? "#91a09a"; return <li key={id} style={{ borderLeftColor: workspaceColor }}><span><strong>{dependency.title}</strong><small><i style={{ background: workspaceColor }}/><em style={{ color: workspaceColor }}>{dependency.project}</em> · {progress(dependency)}% complete</small></span><button onClick={() => updateTask(taskToEdit.id, { dependencies: (taskToEdit.dependencies ?? []).filter((item) => item !== id) })} aria-label={`Remove ${dependency.title}`}>×</button></li>; })}</ul>
           </div>
-          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{taskToEdit.backlog ? <span>Not in Journeys yet</span> : <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
+          <div className={`panel-footer task-footer ${taskToEdit.backlog ? "backlog-task-footer" : ""}`}>{!taskToEdit.backlog && <button className="save-btn" onClick={() => viewTaskInJourneys(taskToEdit)}>View</button>}{!taskToEdit.backlog && (taskToEdit.project === ON_HOLD_WORKSPACE ? <button className="save-btn" onClick={() => resumeTask(taskToEdit)}>Resume</button> : <button className="save-btn" onClick={() => pauseTask(taskToEdit)}>Pause</button>)}<button className="save-btn" onClick={() => { if (window.confirm("Delete this task?")) deleteTask(taskToEdit.id); }}>Delete</button><button className="save-btn" onClick={() => finishTaskEdit(taskToEdit)}>Done</button></div>
         </aside>
       )}
 
       {!taskToEdit && selectedStep && selectedTask && (
         <aside className={`detail-panel ${detailsFullscreen ? "details-fullscreen" : ""}`}>
-          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><div className="panel-head-actions"><button className="panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details">×</button></div></div>
+          <div className="panel-head"><div><span>STEP DETAILS</span><strong>{selectedTask.title}</strong></div><div className="panel-head-actions"><button className="save-btn panel-expand" onClick={() => setDetailsFullscreen(true)}>Open full screen</button><button onClick={() => { setSelected(null); setDetailsFullscreen(false); }} aria-label="Close details">×</button></div></div>
           <div className="panel-body">
             <label className="field-label" htmlFor="step-name">Step name</label>
             <input id="step-name" className="title-input" value={selectedStep.label} onChange={(e) => updateStep({ label: e.target.value })} />
@@ -954,7 +956,7 @@ export default function Home() {
             <div className="attachments"><span>{selectedStep.attachment ? `Attached: ${selectedStep.attachment.name}` : "Attachments"}</span><label className="attachment-button">＋ Add file<input type="file" onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) uploadAttachment(file); e.currentTarget.value = ""; }} /></label>{selectedStep.attachment && <a className="attachment-download" href={`/api/attachments/${encodeURIComponent(selectedStep.attachment.id)}`} target="_blank" rel="noreferrer">Open</a>}</div>
             <div className="activity"><span className="tiny-avatar">CS</span><p><strong>{selectedStep.activity?.[0]?.message ?? "Step created"}</strong><small>{selectedStep.activity?.[0]?.timestamp ? formatRelativeDate(selectedStep.activity[0].timestamp.slice(0, 10)) : "No activity yet"}</small></p><i>{statusLabel[selectedStep.status]}</i></div>
           </div>
-          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setSelected(null); }}>Done</button></div>
+          <div className="panel-footer step-footer"><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>View full task →</button><button className="save-btn" onClick={() => { if (window.confirm("Delete this step?")) deleteSelectedStep(); }}>Delete step</button><button className="save-btn" onClick={() => { setDetailsFullscreen(false); setEditTaskId(selectedTask.id); setSelected(null); }}>Done</button></div>
         </aside>
       )}
 
