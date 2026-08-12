@@ -282,14 +282,6 @@ export default function Home() {
   const saveAttemptRef = useRef(0);
 
   useEffect(() => {
-    const button = filterButtonRefs.current[filter];
-    if (!button) return;
-    const parent = button.parentElement?.getBoundingClientRect();
-    const rect = button.getBoundingClientRect();
-    if (parent) setFilterPill({ left: rect.left - parent.left, width: rect.width });
-  }, [filter, currentView, workspaceTaskCount]);
-
-  useEffect(() => {
     let cancelled = false;
     async function loadData() {
       try {
@@ -494,6 +486,15 @@ export default function Home() {
   const urgentSteps = sortedOpenSteps.slice(0, 5);
   const visibleNotifications = blockedSteps.filter(({ step }) => !dismissedNotificationIds.includes(step.id));
   const workspaceTaskCount = activeWorkspace ? tasks.filter((task) => task.project === activeWorkspace).length : tasks.length;
+
+  useEffect(() => {
+    const button = filterButtonRefs.current[filter];
+    if (!button) return;
+    const parent = button.parentElement?.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    if (parent) setFilterPill({ left: rect.left - parent.left, width: rect.width });
+  }, [filter, currentView, workspaceTaskCount]);
+
   const inMotionCount = tasks.filter((task) => task.steps.some((step) => step.status === "in-progress")).length;
   const blockedCount = tasks.filter((task) => task.steps.some((step) => step.status === "blocked")).length;
   const closestStep = useMemo(() => openSteps
