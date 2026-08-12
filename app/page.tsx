@@ -277,7 +277,17 @@ export default function Home() {
   const [clock, setClock] = useState(() => new Date());
   const newTitleRef = useRef<HTMLInputElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const filterButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [filterPill, setFilterPill] = useState({ left: 3, width: 84 });
   const saveAttemptRef = useRef(0);
+
+  useEffect(() => {
+    const button = filterButtonRefs.current[filter];
+    if (!button) return;
+    const parent = button.parentElement?.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    if (parent) setFilterPill({ left: rect.left - parent.left, width: rect.width });
+  }, [filter, currentView, workspaceTaskCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -535,7 +545,7 @@ export default function Home() {
   function updateTask(taskId: number, patch: Partial<Task>) {
     setTasks((current) => current.map((task) => task.id === taskId ? { ...task, ...patch } : task));
     const task = tasks.find((item) => item.id === taskId);
-    if (task) recordActivity("edited", "journey", `Edited journey “${task.title}”.`);
+    if (task) recordActivity("edited", "journey", `Edited workstream “${task.title}”.`);
   }
 
   function toggleTaskCollapsed(taskId: number) {
@@ -637,7 +647,7 @@ export default function Home() {
     setNewWorkspace("");
     setFormError("");
     setShowNew(false);
-    recordActivity("added", "journey", `Created journey “${newTitle.trim()}”.`);
+    recordActivity("added", "journey", `Created workstream “${newTitle.trim()}”.`);
   }
 
   function addBacklogTask() {
@@ -670,7 +680,7 @@ export default function Home() {
     setTasks((current) => current.filter((task) => task.id !== taskId));
     if (selected?.taskId === taskId) setSelected(null);
     if (editTaskId === taskId) setEditTaskId(null);
-    if (task) recordActivity("removed", "journey", `Removed journey “${task.title}”.`);
+    if (task) recordActivity("removed", "journey", `Removed workstream “${task.title}”.`);
   }
 
   function deleteSelectedStep() {
@@ -711,14 +721,14 @@ export default function Home() {
   function pauseTask(task: Task) {
     if (task.project === ON_HOLD_WORKSPACE) return;
     updateTask(task.id, { project: ON_HOLD_WORKSPACE, pausedFrom: task.project });
-    recordActivity("moved", "journey", `Paused journey “${task.title}” in On hold.`);
+    recordActivity("moved", "journey", `Paused workstream “${task.title}” in On hold.`);
     setEditTaskId(null);
   }
 
   function resumeTask(task: Task) {
     const fallback = Object.entries(workspaces).find(([name, info]) => info.active && name !== ON_HOLD_WORKSPACE)?.[0] ?? "Brand refresh";
     updateTask(task.id, { project: task.pausedFrom && workspaces[task.pausedFrom] ? task.pausedFrom : fallback, pausedFrom: undefined });
-    recordActivity("moved", "journey", `Resumed journey “${task.title}”.`);
+    recordActivity("moved", "journey", `Resumed workstream “${task.title}”.`);
     setEditTaskId(null);
   }
 
@@ -855,12 +865,12 @@ export default function Home() {
               {name === ON_HOLD_WORKSPACE ? <span className="workspace-status system">System</span> : <button className={`workspace-status ${info.active ? "open" : "closed"}`} onClick={() => setWorkspaces((current) => ({ ...current, [name]: { ...current[name], active: !current[name].active } }))}>{info.active ? "Live" : "Closed"}</button>}
             </div>)}
             <div className="new-workspace-row"><input value={newWorkspaceName} onChange={(e) => setNewWorkspaceName(e.target.value)} placeholder="New workspace name"/><label className="color-picker"><input type="color" value={newWorkspaceColor} onChange={(e) => setNewWorkspaceColor(e.target.value)}/><span>{newWorkspaceColor.toUpperCase()}</span></label><button onClick={() => { const name = newWorkspaceName.trim(); if (name && !Object.prototype.hasOwnProperty.call(workspaces, name)) { setWorkspaces((current) => ({ ...current, [name]: { description: "A collection of related tasks and journeys.", color: newWorkspaceColor, active: true } })); setNewWorkspaceName(""); } }}>＋ New workspace</button></div>
-          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : settingsTab === "activity" ? <section className="activity-log-page"><div className="settings-card activity-log-card">{activityLog.length === 0 ? <div className="empty"><span>◌</span><h3>No activity yet</h3><p>Your latest Kairos changes will appear here.</p></div> : [...activityLog].reverse().map((entry) => <article className="activity-log-row" key={entry.id}><span className={`activity-action ${entry.action}`}>{entry.action}</span><div><strong>{entry.message}</strong><time>{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></div></article>)}</div></section> : settingsTab === "uploads" ? <><div className="settings-card uploads-card">{uploads.length === 0 ? <div className="empty"><span>⌁</span><h3>No uploads yet</h3><p>Files attached to steps will appear here.</p></div> : uploads.map((attachment) => <article className="upload-row" key={attachment.id}><div><strong>{attachment.name}</strong><small>{Math.ceil(attachment.size / 1024)} KB · {attachment.type || "File"}</small></div><div><a className="save-btn" href={`/api/attachments/${encodeURIComponent(attachment.id)}`} target="_blank" rel="noreferrer">Open</a><button className="save-btn" onClick={() => deleteUpload(attachment)}>Delete</button></div></article>)}</div><div className="settings-note"><span>i</span><p><strong>Files stored with Kairos</strong>Uploads are stored on the Kairos server and can be removed here. Deleting a file also clears its step attachment.</p></div></> : <><div className="settings-card data-settings-card">
+          </div><div className="settings-note"><span>i</span><p><strong>Projects without clutter</strong>Closing a workspace hides it from navigation without deleting its tasks. Reopen it here any time.</p></div></> : settingsTab === "activity" ? <section className="activity-log-page"><div className="settings-card activity-log-card">{activityLog.length === 0 ? <div className="empty"><span>◌</span><h3>No activity yet</h3><p>Your latest Kairos changes will appear here.</p></div> : [...activityLog].reverse().map((entry) => <article className="activity-log-row" key={entry.id}><span className={`activity-action ${entry.action}`}>{entry.action}</span><div><strong>{entry.message.replace(/\bjourney\b/gi, "workstream")}</strong><time>{new Date(entry.timestamp).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</time></div></article>)}</div></section> : settingsTab === "uploads" ? <><div className="settings-card uploads-card">{uploads.length === 0 ? <div className="empty"><span>⌁</span><h3>No uploads yet</h3><p>Files attached to steps will appear here.</p></div> : uploads.map((attachment) => <article className="upload-row" key={attachment.id}><div><strong>{attachment.name}</strong><small>{Math.ceil(attachment.size / 1024)} KB · {attachment.type || "File"}</small></div><div><a className="save-btn" href={`/api/attachments/${encodeURIComponent(attachment.id)}`} target="_blank" rel="noreferrer">Open</a><button className="save-btn" onClick={() => deleteUpload(attachment)}>Delete</button></div></article>)}</div><div className="settings-note"><span>i</span><p><strong>Files stored with Kairos</strong>Uploads are stored on the Kairos server and can be removed here. Deleting a file also clears its step attachment.</p></div></> : <><div className="settings-card data-settings-card">
             <div><p className="eyebrow">STORAGE</p><h3>Your Kairos data</h3><p>{saveState === "saved" ? "Saved securely to this Kairos server." : saveState === "saving" ? "Saving your latest changes…" : saveState === "offline" ? "Offline: local data is shown until the server reconnects." : `Save failed: ${saveError || "the server did not accept the change."}`}</p></div>
             <div className="data-actions"><button onClick={exportData}>↓ Download backup</button><label>↑ Import backup<input type="file" accept="application/json,.json" onChange={(event) => { const file = event.target.files?.[0]; if (file) importData(file); event.currentTarget.value = ""; }} /></label></div>
           </div><div className="settings-note"><span>i</span><p><strong>Moving to your Pi</strong>Download a backup here, open Kairos on the Pi, then import the same file. The Pi stores future changes in SQLite automatically.</p></div></>}
         </section> : currentView === "backlog" ? <section className="backlog-page">
-          <div className="backlog-hero"><h2>Kairos</h2><form onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><FloatingLabelInput label="What needs doing?" value={quickTitle} onChange={(value) => { setQuickTitle(value); setFormError(""); }} id="kairos-capture" name="kairos-capture" autoComplete="new-password" /><button className="new-btn backlog-new-btn" type="submit"><span className="new-btn-inner"><svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6.5 2v9M2 6.5h9"/></svg>New task</span></button></form>{formError && <p className="form-error" role="alert">{formError}</p>}</div>
+          <div className="backlog-hero"><h2>Kairos</h2><form autoComplete="off" data-np-autofill="false" data-lpignore="true" data-bwignore="true" onSubmit={(event) => { event.preventDefault(); addBacklogTask(); }}><FloatingLabelInput label="What needs doing?" value={quickTitle} onChange={(value) => { setQuickTitle(value); setFormError(""); }} id="kairos-capture" name="kairos-capture" autoComplete="off" /><input type="submit" className="sr-only" aria-label="Add task" />{formError && <p className="form-error" role="alert">{formError}</p>}</form></div>
           <div className="backlog-lists"><section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">ACTIVE LIST</p><h3>Open workstreams</h3></div><span>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length}</span></div>{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).map((task) => { const urgent = task.steps.some((step) => { const days = daysUntil(step.deadline, clock); return step.status !== "done" && days !== null && days < 3; }); return <article className={`backlog-row ${urgent ? "urgent" : ""}`} key={task.id}><div><strong>{task.title}{urgent && <span className="urgent-marker">URGENT</span>}</strong><small>{task.project} · {progress(task)}% complete</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Open</button></article>; })}{tasks.filter((task) => !task.backlog && task.steps.some((step) => step.status !== "done")).length === 0 && <p className="backlog-empty">No open workstreams.</p>}</section>
             <section className="backlog-list"><div className="backlog-list-head"><div><p className="eyebrow">UNCATEGORISED</p><h3>New tasks</h3></div><span>{tasks.filter((task) => task.backlog).length}</span></div>{tasks.filter((task) => task.backlog).map((task) => <article className="backlog-row" key={task.id}><div><strong>{task.title}</strong><small>Add a workspace and steps to move this into Workstreams.</small></div><button className="save-btn" onClick={() => { setEditTaskId(task.id); setSelected(null); }}>Shape</button></article>)}{tasks.filter((task) => task.backlog).length === 0 && <p className="backlog-empty">Your quick-captured tasks will appear here.</p>}</section>
           </div>
@@ -884,8 +894,8 @@ export default function Home() {
         <div className="content-head">
           <div><h2>{activeWorkspace ? "Work in this workspace" : "Workstreams"}</h2><p>{activeWorkspace ? "Related work, milestones, and dependencies in one view." : "See every task from first thought to finish line."}</p></div>
           <div className="content-controls"><label className="sort-control"><span>Sort by</span><Dropdown label="Sort workstreams" value={sortBy} onChange={(value) => setSortBy(value as typeof sortBy)} items={[{ value: "manual", label: "Default order" }, { value: "urgency", label: "Urgency" }, { value: "deadline", label: "Deadline date" }]} /><button className="sort-direction" onClick={() => setSortDirection((value) => value === "asc" ? "desc" : "asc")} aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}>{sortDirection === "asc" ? "↑" : "↓"}</button></label><div className="filters t-tabs">
-            <span className="t-tabs-pill" aria-hidden="true" />
-            {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
+            <span className="t-tabs-pill" aria-hidden="true" style={{ transform: `translateX(${filterPill.left}px)`, width: filterPill.width }} />
+            {['All work', 'In progress', 'Blocked', 'High'].map((item) => <button ref={(element) => { filterButtonRefs.current[item] = element; }} key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}{item === 'All work' && <em>{workspaceTaskCount}</em>}</button>)}
           </div></div>
         </div>
 
