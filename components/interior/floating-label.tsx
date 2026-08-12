@@ -24,7 +24,7 @@ export function FloatingLabelInput({ label, value, onChange, id, name, hint, inv
   return <div className="floating-label-field">
     <div className={`floating-label-shell ${focused ? "focused" : ""} ${invalid ? "invalid" : ""}`}>
       <input id={fieldId} name={name} value={value} type="text" autoComplete={autoComplete} inputMode={inputMode} data-np-autofill="false" data-np-autofill-field-type="ignore" data-1p-ignore="true" data-lpignore="true" data-bwignore="true" aria-invalid={invalid || undefined} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onChange={(event) => onChange(event.currentTarget.value)} />
-      <motion.label htmlFor={fieldId} initial={false} animate={{ y: raised ? -25 : 0, x: raised ? -7 : 0, scale: raised ? .88 : 1 }} transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 760, damping: 46, mass: .5 }} className={raised ? "raised" : ""}>{label}</motion.label>
+      <motion.label htmlFor={fieldId} initial={false} animate={{ y: raised ? -25 : 0, x: raised ? -7 : 0, scale: raised ? .88 : 1 }} transition={reduced ? { duration: 0 } : { type: "spring", stiffness: 480, damping: 42, mass: .6 }} className={raised ? "raised" : ""}>{label}</motion.label>
     </div>
     <p className={`floating-label-hint ${invalid ? "invalid" : ""}`}>{hint ?? " "}</p>
   </div>;
